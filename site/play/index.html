@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#20231f">
+  <title>Walk the Valley · Playable Universe</title>
+  <link rel="stylesheet" href="./play.css">
+</head>
+<body>
+  <header>
+    <a href="../">← Playable Universe</a>
+    <div class="mode"><span id="mode-dot"></span><strong id="mode-label">PLAYABLE PRESENT</strong></div>
+    <a href="../attest/">Make an Attest →</a>
+  </header>
+
+  <main>
+    <section class="intro">
+      <p class="eyebrow">WIRE-WORLD v0</p>
+      <h1>Walk the Valley.</h1>
+      <p>Move through one continuous terrain. History is to the left. The live Present is under your feet. Scenario branches are to the right.</p>
+    </section>
+
+    <section class="game-shell">
+      <div class="canvas-wrap">
+        <canvas id="world" width="1100" height="610" aria-label="Playable Universe 2D Valley"></canvas>
+        <div class="hud">
+          <span id="coords">x 1500 · present</span>
+          <span>WASD / arrows · tap markers · E to inspect</span>
+        </div>
+      </div>
+
+      <aside id="inspect-panel">
+        <p class="eyebrow">NEARBY TILE</p>
+        <h2 id="inspect-title">The Moving Present</h2>
+        <div id="inspect-badges" class="badges"></div>
+        <p id="inspect-summary">You are standing on the moving phase boundary. Walk left to visit source-backed history or right to enter explicitly projected futures.</p>
+        <code id="inspect-source">docs/TEMPORAL_MODEL_V0.md</code>
+        <div id="inspect-action"></div>
+      </aside>
+    </section>
+
+    <section class="touch" aria-label="Touch movement controls">
+      <button data-dir="left" aria-label="Move left">←</button>
+      <div>
+        <button data-dir="up" aria-label="Move up">↑</button>
+        <button id="interact" class="interact" aria-label="Inspect nearby tile">◎</button>
+        <button data-dir="down" aria-label="Move down">↓</button>
+      </div>
+      <button data-dir="right" aria-label="Move right">→</button>
+    </section>
+
+    <section class="legend">
+      <div><i class="past"></i><b>Past</b><span>source-backed / reconstructed</span></div>
+      <div><i class="present"></i><b>Present</b><span>live / candidate / observed</span></div>
+      <div><i class="future"></i><b>Future</b><span>projected / scenario</span></div>
+      <div><i class="outside"></i><b>Failure branch</b><span>reachable ≠ preferred</span></div>
+    </section>
+  </main>
+
+  <footer>
+    <span>2D reference client · no engine dependency</span>
+    <span>Rendering ≠ attestation · projection ≠ prediction</span>
+  </footer>
+  <script src="./play.js" defer></script>
+</body>
+</html>
