@@ -1,0 +1,46 @@
+{
+  "schema": "playable.world-state.v0",
+  "scene_id": "scene:present-room:fixture-v0",
+  "temporal_mode": "present",
+  "branch_id": null,
+  "as_of": "2026-10-06T01:15:00Z",
+  "sequence": 3,
+  "entities": {
+    "fixture:physical-device-01": {
+      "persona_id": null,
+      "transform": {
+        "position": [0, 0, 0]
+      },
+      "state": {
+        "power": "off"
+      },
+      "truth_class": "observed",
+      "last_event_id": "event:fixture-observed-0001"
+    },
+    "human:participant-01": {
+      "persona_id": "persona:participant-01",
+      "transform": {
+        "position": [-1, 0, 2]
+      },
+      "state": {
+        "presence": "present"
+      },
+      "truth_class": "observed",
+      "last_event_id": "event:join-0001"
+    },
+    "companion:lumina": {
+      "persona_id": "persona:lumina:room",
+      "transform": {
+        "position": [1, 0, 2]
+      },
+      "state": {
+        "presence": "present"
+      },
+      "truth_class": "observed",
+      "last_event_id": "event:join-0002"
+    }
+  },
+  "provenance_refs": [
+    "docs/PLAYABLE_PRESENT_V0.md"
+  ]
+}
