@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://quietwire.ai/schemas/playable-operator-receipt.v0.schema.json",
+  "title": "Playable Universe Operator Receipt v0",
+  "type": "object",
+  "required": [
+    "schema", "receipt_id", "request_id", "recorded_at",
+    "actor_uid", "actor_user", "actor_role", "policy_version",
+    "interlock_state", "operation", "request_sha256", "decision", "result"
+  ],
+  "properties": {
+    "schema": { "const": "playable.operator-receipt.v0" },
+    "receipt_id": { "type": "string" },
+    "request_id": { "type": "string" },
+    "recorded_at": { "type": "string", "format": "date-time" },
+    "actor_uid": { "type": "integer", "minimum": 0 },
+    "actor_user": { "type": "string" },
+    "actor_role": { "type": "string" },
+    "policy_version": { "type": "string" },
+    "interlock_state": { "enum": ["NORMAL", "CONSTRAINED"] },
+    "operation": { "type": "string" },
+    "target": { "type": ["string", "null"] },
+    "request_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "decision": { "enum": ["admitted", "refused", "error"] },
+    "result": { "type": "object", "additionalProperties": true }
+  },
+  "additionalProperties": false
+}
