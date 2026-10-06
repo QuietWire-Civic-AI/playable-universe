@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://quietwire.ai/schemas/playable-world-state.v0.schema.json",
+  "title": "Playable Universe WorldState v0",
+  "type": "object",
+  "required": ["schema", "scene_id", "temporal_mode", "as_of", "entities"],
+  "properties": {
+    "schema": { "const": "playable.world-state.v0" },
+    "scene_id": { "type": "string" },
+    "temporal_mode": { "enum": ["past", "present", "future"] },
+    "branch_id": { "type": ["string", "null"] },
+    "as_of": { "type": "string", "format": "date-time" },
+    "sequence": { "type": ["integer", "null"], "minimum": 0 },
+    "entities": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "persona_id": { "type": ["string", "null"] },
+          "transform": { "type": "object", "additionalProperties": true },
+          "state": { "type": "object", "additionalProperties": true },
+          "truth_class": {
+            "enum": [
+              "attested", "observed", "reported", "inferred",
+              "reconstructed", "simulated", "projected", "disputed"
+            ]
+          },
+          "last_event_id": { "type": ["string", "null"] }
+        },
+        "additionalProperties": false
+      }
+    },
+    "provenance_refs": { "type": "array", "items": { "type": "string" } }
+  },
+  "additionalProperties": false
+}
