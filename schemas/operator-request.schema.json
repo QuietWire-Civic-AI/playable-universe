@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://quietwire.ai/schemas/playable-operator-request.v0.schema.json",
+  "title": "Playable Universe Operator Request v0",
+  "type": "object",
+  "required": ["schema", "request_id", "operation", "payload"],
+  "properties": {
+    "schema": { "const": "playable.operator-request.v0" },
+    "request_id": { "type": "string", "minLength": 1, "maxLength": 160 },
+    "operation": {
+      "enum": [
+        "operator.status",
+        "operator.receipts",
+        "interlock.inspect",
+        "candidate.inspect",
+        "evidence.report_unavailable",
+        "candidate.corroborate",
+        "candidate.dispute",
+        "promotion.propose_cap",
+        "media.review.approve",
+        "media.review.reject"
+      ]
+    },
+    "target": { "type": ["string", "null"], "maxLength": 300 },
+    "payload": { "type": "object", "additionalProperties": true }
+  },
+  "additionalProperties": false
+}
