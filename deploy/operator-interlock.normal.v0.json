@@ -1,0 +1,7 @@
+{
+  "schema": "playable.operator-interlock.v0",
+  "state": "NORMAL",
+  "reason": "initial activation",
+  "authority": "root-owned local operator-plane state",
+  "updated_at": "2026-10-06T00:00:00Z"
+}
