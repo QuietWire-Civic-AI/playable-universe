@@ -1,0 +1,73 @@
+{
+  "schema": "playable.scene-manifest.v0",
+  "scene_id": "scene:present-room:fixture-v0",
+  "title": "Playable Present — live fixture room",
+  "description": "Engine-development fixture for presence plus a generic physical-world observation/control target.",
+  "temporal_mode": "present",
+  "at": null,
+  "branch_id": null,
+  "spatial_reference": {
+    "kind": "local_cartesian",
+    "origin": null,
+    "units": "meters"
+  },
+  "assets": [],
+  "entities": [
+    {
+      "entity_id": "fixture:physical-device-01",
+      "persona_id": null,
+      "asset_ref": null,
+      "transform": {
+        "position": [0, 0, 0],
+        "rotation_quaternion": [0, 0, 0, 1],
+        "scale": [1, 1, 1]
+      },
+      "truth_class": "observed"
+    },
+    {
+      "entity_id": "human:participant-01",
+      "persona_id": "persona:participant-01",
+      "asset_ref": null,
+      "transform": {
+        "position": [-1, 0, 2],
+        "rotation_quaternion": [0, 0, 0, 1],
+        "scale": [1, 1, 1]
+      },
+      "truth_class": "observed"
+    },
+    {
+      "entity_id": "companion:lumina",
+      "persona_id": "persona:lumina:room",
+      "asset_ref": null,
+      "transform": {
+        "position": [1, 0, 2],
+        "rotation_quaternion": [0, 0, 0, 1],
+        "scale": [1, 1, 1]
+      },
+      "truth_class": "observed"
+    }
+  ],
+  "interaction_zones": [
+    {
+      "zone_id": "zone:fixture-control",
+      "kind": "control",
+      "target_ref": "fixture:physical-device-01"
+    }
+  ],
+  "channels": {
+    "snapshot_url": "/api/v0/scenes/scene:present-room:fixture-v0/state",
+    "events_url": "/api/v0/scenes/scene:present-room:fixture-v0/events",
+    "events_websocket_url": "/api/v0/ws?scene=scene:present-room:fixture-v0",
+    "intent_url": "/api/v0/intents",
+    "media_room_ref": "media:present-room:fixture-v0"
+  },
+  "provenance_refs": [
+    "docs/PLAYABLE_PRESENT_V0.md"
+  ],
+  "rights_refs": [
+    "rights:room-policy:fixture-v0"
+  ],
+  "notes": [
+    "Generic fixture only; does not claim a live Flipper integration."
+  ]
+}
