@@ -161,6 +161,45 @@ curl -fsS http://127.0.0.1:18270/healthz >/dev/null
 nginx -t
 systemctl reload nginx
 
+# nginx reload is asynchronous. Do not race the old TLS workers.
+# Wait until the local SNI path presents the canonical certificate.
+tls_ready=false
+for _ in $(seq 1 80); do
+  if echo | openssl s_client \
+      -connect 127.0.0.1:443 \
+      -servername "$HOST" 2>/dev/null \
+      | openssl x509 -noout -ext subjectAltName 2>/dev/null \
+      | grep -q "DNS:$HOST"; then
+    tls_ready=true
+    break
+  fi
+  sleep 0.25
+done
+
+test "$tls_ready" = true || {
+  echo "REFUSED: nginx did not begin serving the playable.quietwire.ai certificate"
+  exit 1
+}
+
+# Then wait for the canonical vhost content/API, locally through SNI.
+origin_ready=false
+for _ in $(seq 1 40); do
+  if curl -fsS --resolve "$HOST:443:127.0.0.1" "https://$HOST/" \
+       | grep -q "Playable Universe" \
+     && curl -fsS --resolve "$HOST:443:127.0.0.1" "https://$HOST/api/healthz" \
+       | python3 -c 'import json,sys; x=json.load(sys.stdin); assert x.get("ok") is True' \
+       >/dev/null 2>&1; then
+    origin_ready=true
+    break
+  fi
+  sleep 0.25
+done
+
+test "$origin_ready" = true || {
+  echo "REFUSED: canonical local vhost did not become healthy"
+  exit 1
+}
+
 # Canonical public origin must now be real, not a browser/cache alias.
 curl -fsS "https://$HOST/" | grep -q "Playable Universe"
 curl -fsS "https://$HOST/attest/" | grep -q "Make an Attest"
@@ -176,7 +215,7 @@ curl -fsS "https://fc.quietwire.ai/playable/"   | grep -q "Walk the world we can
 # Verify the certificate actually names the new origin.
 echo | openssl s_client   -connect "$HOST:443"   -servername "$HOST" 2>/dev/null   | openssl x509 -noout -ext subjectAltName   | grep -q "DNS:$HOST"
 
-echo "PLAYABLE_PUBLIC_ORIGIN_V1_DEPLOY_OK=true"
+echo "PLAYABLE_PUBLIC_ORIGIN_V1_1_DEPLOY_OK=true"
 echo "canonical=https://playable.quietwire.ai/"
 echo "attest=https://playable.quietwire.ai/attest/"
 echo "play=https://playable.quietwire.ai/play/"
