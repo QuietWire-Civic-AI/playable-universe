@@ -66,22 +66,67 @@ function tileToMarker(tile) {
   };
 }
 
-function eventToMarker(event) {
-  const p=event.payload || {};
-  const claim=p.claim?.text || "Public field candidate";
-  const pos=markerPosition(event.event_id || claim,"present");
-  return {
-    ...pos,
-    r:12,
-    title:claim.length>58 ? claim.slice(0,55)+"…" : claim,
-    layer:"present",
-    status:"self-attested / unverified",
-    summary:(p.witness?.display_name || "Anonymous witness")+" attested: “"+claim+"”",
-    source:p.candidate_id || event.event_id,
-    action:null,
-    media:p.media || [],
-    assurance:p.assurance?.class || "browser-self-asserted"
-  };
+function eventsToMarkers(events) {
+  const grouped = new Map();
+
+  for (const event of events) {
+    const p = event.payload || {};
+    const candidateId = p.candidate_id || event.targets?.[0] || event.event_id;
+    if (!grouped.has(candidateId)) {
+      grouped.set(candidateId, {
+        candidateId,
+        received:null,
+        lifecycle:[],
+        media:[],
+        evidenceSummary:null
+      });
+    }
+    const group = grouped.get(candidateId);
+    group.lifecycle.push(event);
+    if (event.event_type === "attestation.candidate_received") {
+      group.received = event;
+    }
+    if (Array.isArray(p.media) && p.media.length) {
+      group.media = p.media;
+    }
+    if (p.evidence_summary) {
+      group.evidenceSummary = p.evidence_summary;
+    }
+  }
+
+  return [...grouped.values()].map(group => {
+    const base = group.received || group.lifecycle[0] || {};
+    const p = base.payload || {};
+    const claim = p.claim?.text || "Public field candidate";
+    const who = p.witness?.display_name || "Anonymous witness";
+    const pos = markerPosition(group.candidateId,"present");
+    const summary = group.evidenceSummary || {};
+    let evidenceNote = "";
+    if ((summary.public_derivative_count || 0) > 0) {
+      evidenceNote = " Public evidence is available.";
+    } else if ((summary.private_retained_count || 0) > 0) {
+      evidenceNote = " The exact source image is preserved privately.";
+    } else if ((summary.source_unavailable_reported_count || 0) > 0) {
+      evidenceNote = " The bound source image was later reported unavailable.";
+    } else if ((summary.bound_photo_count || 0) > 0) {
+      evidenceNote = " A photo digest is bound, but FC does not retain the bytes.";
+    }
+
+    return {
+      ...pos,
+      r:12,
+      title:claim.length>58 ? claim.slice(0,55)+"…" : claim,
+      layer:"present",
+      status:"self-attested / unverified",
+      summary:who+" attested: “"+claim+"”"+evidenceNote,
+      source:group.candidateId,
+      action:null,
+      media:group.media,
+      assurance:p.assurance?.class || "browser-self-asserted",
+      lifecycle:group.lifecycle,
+      evidenceSummary:summary
+    };
+  });
 }
 
 async function loadWorld() {
@@ -95,7 +140,7 @@ async function loadWorld() {
     const tiles=await tilesResponse.json();
     const events=await eventsResponse.json();
     const tileMarkers=(tiles.items || []).map(tileToMarker);
-    const eventMarkers=(events.items || []).map(eventToMarker);
+    const eventMarkers=eventsToMarkers(events.items || []);
     markers=[...tileMarkers,portalMarker,...eventMarkers];
   } catch(err) {
     console.warn("World API unavailable; keeping local portal only",err);
@@ -230,12 +275,26 @@ function inspect(m){
   sourceEl.textContent=m.source;
   actionEl.innerHTML=m.action?'<a href="'+esc(m.action)+'">Enter →</a>':"";
   const media=(m.media||[])[0];
+  const lifecycle = m.lifecycle || [];
+  const lastLifecycle = lifecycle.length
+    ? lifecycle[lifecycle.length - 1]
+    : null;
+  let lifecycleNote = "";
+  if (lastLifecycle && lastLifecycle.event_type !== "attestation.candidate_received") {
+    lifecycleNote =
+      '<p class="media-note">Latest lifecycle event: ' +
+      esc(lastLifecycle.event_type) +
+      ' · ' +
+      esc(new Date(lastLifecycle.recorded_at).toLocaleString()) +
+      '</p>';
+  }
   if(media?.url){
     mediaEl.innerHTML=
       '<img src="'+esc(media.url)+'" alt="Published evidence derivative">'+
-      '<p class="media-note">Published derivative · source digest remains bound in the attestation.</p>';
+      '<p class="media-note">Published derivative · source digest remains bound in the attestation.</p>'+
+      lifecycleNote;
   }else{
-    mediaEl.innerHTML="";
+    mediaEl.innerHTML=lifecycleNote;
   }
 }
 
