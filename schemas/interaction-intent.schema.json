@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://quietwire.ai/schemas/playable-interaction-intent.v0.schema.json",
+  "title": "Playable Universe InteractionIntent v0",
+  "description": "A requested interaction. An intent is not evidence that an action was authorized or executed.",
+  "type": "object",
+  "required": [
+    "schema", "intent_id", "scene_id", "temporal_mode",
+    "actor", "action", "created_at", "payload"
+  ],
+  "properties": {
+    "schema": { "const": "playable.interaction-intent.v0" },
+    "intent_id": { "type": "string" },
+    "scene_id": { "type": "string" },
+    "branch_id": { "type": ["string", "null"] },
+    "temporal_mode": { "enum": ["past", "present", "future"] },
+    "actor": {
+      "type": "object",
+      "required": ["entity_id"],
+      "properties": {
+        "entity_id": { "type": "string" },
+        "persona_id": { "type": ["string", "null"] }
+      },
+      "additionalProperties": false
+    },
+    "action": { "type": "string", "minLength": 1 },
+    "targets": { "type": "array", "items": { "type": "string" } },
+    "created_at": { "type": "string", "format": "date-time" },
+    "payload": { "type": "object", "additionalProperties": true },
+    "authority_refs": { "type": "array", "items": { "type": "string" } },
+    "rights_refs": { "type": "array", "items": { "type": "string" } },
+    "notes": { "type": "array", "items": { "type": "string" } }
+  },
+  "additionalProperties": false
+}
