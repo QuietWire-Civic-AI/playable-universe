@@ -138,11 +138,37 @@ ln -sfn "$NGINX_AVAILABLE" "$NGINX_ENABLED"
 nginx -t
 systemctl reload nginx
 
-# Reuse the existing Certbot account; do not create a new account identity.
-certbot certonly   --webroot   --webroot-path "$PLAY_ROOT"   --cert-name "$HOST"   -d "$HOST"   --non-interactive   --agree-tos   --keep-until-expiring   --deploy-hook "systemctl reload nginx"
+# Reuse the already-issued certificate if present. Only invoke Certbot
+# when the certificate material does not exist.
+if [ -f "/etc/letsencrypt/live/$HOST/fullchain.pem" ] \
+   && [ -f "/etc/letsencrypt/live/$HOST/privkey.pem" ]; then
+  echo "certificate_reused=true"
+else
+  certbot certonly \
+    --webroot \
+    --webroot-path "$PLAY_ROOT" \
+    --cert-name "$HOST" \
+    -d "$HOST" \
+    --non-interactive \
+    --agree-tos \
+    --keep-until-expiring
+  echo "certificate_reused=false"
+fi
 
-test -f "/etc/letsencrypt/live/$HOST/fullchain.pem"
-test -f "/etc/letsencrypt/live/$HOST/privkey.pem"
+test -f "/etc/letsencrypt/live/$HOST/fullchain.pem" || {
+  echo "REFUSED: canonical certificate chain missing"
+  exit 1
+}
+test -f "/etc/letsencrypt/live/$HOST/privkey.pem" || {
+  echo "REFUSED: canonical certificate key missing"
+  exit 1
+}
+openssl x509 -in "/etc/letsencrypt/live/$HOST/fullchain.pem" \
+  -noout -ext subjectAltName \
+  | grep -q "DNS:$HOST" || {
+    echo "REFUSED: stored certificate does not name $HOST"
+    exit 1
+  }
 
 install -o root -g root -m 0644 "$NGINX_FINAL" "$NGINX_AVAILABLE"
 
@@ -201,21 +227,62 @@ test "$origin_ready" = true || {
 }
 
 # Canonical public origin must now be real, not a browser/cache alias.
-curl -fsS "https://$HOST/" | grep -q "Playable Universe"
-curl -fsS "https://$HOST/attest/" | grep -q "Make an Attest"
-curl -fsS "https://$HOST/play/" | grep -q "Walk the Valley"
+check_contains() {
+  local url=$1
+  local marker=$2
+  local label=$3
+  curl -fsS "$url" | grep -q "$marker" || {
+    echo "REFUSED: $label smoke check failed"
+    exit 1
+  }
+  echo "$label=ok"
+}
 
-curl -fsS "https://$HOST/api/healthz"   | python3 -c 'import json,sys; x=json.load(sys.stdin); assert x.get("status") == "ok"'
+check_json_status() {
+  local url=$1
+  local label=$2
+  curl -fsS "$url" \
+    | python3 -c 'import json,sys; x=json.load(sys.stdin); assert x.get("status") == "ok"' \
+    || {
+      echo "REFUSED: $label JSON health check failed"
+      exit 1
+    }
+  echo "$label=ok"
+}
 
-curl -fsS "https://$HOST/api/v0/scenes"   | python3 -c 'import json,sys; x=json.load(sys.stdin); assert "items" in x'
+check_contains "https://$HOST/" "Playable Universe" "canonical_root"
+check_contains "https://$HOST/attest/" "Make an Attest" "canonical_attest"
+check_contains "https://$HOST/play/" "Walk the Valley" "canonical_play"
 
-# Old FC path remains a compatibility surface.
-curl -fsS "https://fc.quietwire.ai/playable/"   | grep -q "Walk the world we can actually get to"
+check_json_status "https://$HOST/api/healthz" "canonical_api_health"
+
+curl -fsS "https://$HOST/api/v0/scenes" \
+  | python3 -c 'import json,sys; x=json.load(sys.stdin); assert "items" in x' \
+  || {
+    echo "REFUSED: canonical scenes API check failed"
+    exit 1
+  }
+echo "canonical_scenes=ok"
+
+# Old FC path remains a compatibility surface. Use the same stable page marker
+# as the canonical root; do not depend on an older marketing sentence.
+check_contains \
+  "https://fc.quietwire.ai/playable/" \
+  "Playable Universe" \
+  "fc_compatibility"
 
 # Verify the certificate actually names the new origin.
-echo | openssl s_client   -connect "$HOST:443"   -servername "$HOST" 2>/dev/null   | openssl x509 -noout -ext subjectAltName   | grep -q "DNS:$HOST"
+echo | openssl s_client \
+  -connect "$HOST:443" \
+  -servername "$HOST" 2>/dev/null \
+  | openssl x509 -noout -ext subjectAltName \
+  | grep -q "DNS:$HOST" || {
+    echo "REFUSED: public TLS certificate check failed"
+    exit 1
+  }
+echo "canonical_tls=ok"
 
-echo "PLAYABLE_PUBLIC_ORIGIN_V1_2_DEPLOY_OK=true"
+echo "PLAYABLE_PUBLIC_ORIGIN_V1_3_DEPLOY_OK=true"
 echo "canonical=https://playable.quietwire.ai/"
 echo "attest=https://playable.quietwire.ai/attest/"
 echo "play=https://playable.quietwire.ai/play/"
