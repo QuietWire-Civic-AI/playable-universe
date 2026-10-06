@@ -83,7 +83,7 @@ Two humans + one companion share the same live scene.
 
 ## Tile 6 — Physical-world fixture
 
-Bind a real QuietWire fixture, with the Flipper-node example as the intended first candidate once its exact interface/source record is identified.
+Bind a real QuietWire fixture, with a real governed physical fixture selected from the maintained estate once its exact interface/source record is identified.
 
 Deliver:
 - observation adapter;
