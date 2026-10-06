@@ -45,6 +45,8 @@ Key working documents:
 - [Playable Present](docs/PLAYABLE_PRESENT_V0.md)
 - [Playable Future](docs/PLAYABLE_FUTURE_V0.md)
 - [World API v0](docs/WORLD_API_V0.md)
+- [Bounded Operator Plane v0](docs/OPERATOR_PLANE_V0.md)
+- [Authority Placement — RDC to Domain](docs/AUTHORITY_PLACEMENT_RDC_TO_DOMAIN_V0.md)
 - [Engine Adapter SDK contract](sdk/README.md)
 
 Portable v0 protocol objects:
