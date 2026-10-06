@@ -17,7 +17,7 @@ from datetime import datetime, timezone
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
 HOST = os.environ.get("PLAYABLE_INTAKE_HOST", "127.0.0.1")
 PORT = int(os.environ.get("PLAYABLE_INTAKE_PORT", "18270"))
@@ -564,8 +564,9 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         parsed = urlparse(self.path)
+        request_path = unquote(parsed.path)
 
-        if parsed.path == "/healthz":
+        if request_path == "/healthz":
             return self.send_json(200, {
                 "status": "ok",
                 "service": "playable-attestation-intake",
@@ -574,7 +575,7 @@ class Handler(BaseHTTPRequestHandler):
                 "media": "pending-review",
             })
 
-        if parsed.path == "/v0/world/tiles":
+        if request_path == "/v0/world/tiles":
             try:
                 tiles = read_world_json("data/tiles.json")
             except Exception as exc:
@@ -587,13 +588,13 @@ class Handler(BaseHTTPRequestHandler):
                 "items": tiles,
             })
 
-        if parsed.path == "/v0/scenes":
+        if request_path == "/v0/scenes":
             return self.send_json(200, {
                 "schema": "playable.scene-catalog.v0",
                 "items": world_scene_catalog(),
             })
 
-        scene_match = re.match(r"^/v0/scenes/([a-z0-9-]+)$", parsed.path)
+        scene_match = re.match(r"^/v0/scenes/([a-z0-9-]+)$", request_path)
         if scene_match:
             slug = scene_match.group(1)
             scene = world_scene(slug)
@@ -601,7 +602,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(404, {"error": "scene_not_found"})
             return self.send_json(200, scene)
 
-        state_match = re.match(r"^/v0/scenes/([a-z0-9-]+)/state$", parsed.path)
+        state_match = re.match(r"^/v0/scenes/([a-z0-9-]+)/state$", request_path)
         if state_match:
             slug = state_match.group(1)
             state = world_state(slug)
@@ -609,7 +610,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send_json(404, {"error": "scene_not_found"})
             return self.send_json(200, state)
 
-        events_match = re.match(r"^/v0/scenes/([a-z0-9-]+)/events$", parsed.path)
+        events_match = re.match(r"^/v0/scenes/([a-z0-9-]+)/events$", request_path)
         if events_match:
             slug = events_match.group(1)
             if slug != "present-room":
@@ -624,7 +625,7 @@ class Handler(BaseHTTPRequestHandler):
                 "items": events,
             })
 
-        if parsed.path == "/v0/attestations/public":
+        if request_path == "/v0/attestations/public":
             qs = parse_qs(parsed.query)
             try:
                 limit = min(max(int((qs.get("limit") or ["30"])[0]), 1), 100)
@@ -644,7 +645,7 @@ class Handler(BaseHTTPRequestHandler):
                 "items": items,
             })
 
-        media_match = re.match(r"^/v0/media/(media:[0-9a-f-]{36})$", parsed.path)
+        media_match = re.match(r"^/v0/media/(media:[0-9a-f-]{36})$", request_path)
         if media_match:
             media_id = media_match.group(1)
             with db() as conn:
@@ -660,8 +661,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.send_file(path, row["content_type"])
 
         prefix = "/v0/attestations/"
-        if parsed.path.startswith(prefix):
-            candidate_id = parsed.path[len(prefix):]
+        if request_path.startswith(prefix):
+            candidate_id = request_path[len(prefix):]
             if not candidate_id or "/" in candidate_id:
                 return self.send_json(404, {"error": "not_found"})
             with db() as conn:
@@ -683,15 +684,16 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self):
         parsed = urlparse(self.path)
+        request_path = unquote(parsed.path)
 
         media_match = re.match(
             r"^/v0/attestations/(attest:[0-9a-f-]{36})/photo$",
-            parsed.path,
+            request_path,
         )
         if media_match:
             return self.handle_photo_upload(media_match.group(1))
 
-        if parsed.path != "/v0/attestations":
+        if request_path != "/v0/attestations":
             return self.send_json(404, {"error": "not_found"})
 
         if not rate_allowed(
@@ -806,9 +808,29 @@ class Handler(BaseHTTPRequestHandler):
                 "error": "photo_publication_requires_public_candidate"
             })
         packet = json.loads(candidate["packet_json"])
-        if claimed_source not in photo_hashes(packet):
+        matches = [
+            item for item in packet.get("evidence", [])
+            if item.get("kind") == "photo_hash"
+            and item.get("sha256") == claimed_source
+        ]
+        if not matches:
             return self.send_json(409, {
                 "error": "photo_digest_not_bound_to_attestation"
+            })
+        bound = matches[0]
+        bound_bytes = bound.get("bytes")
+        if bound_bytes is not None and bound_bytes != length:
+            return self.send_json(409, {
+                "error": "photo_byte_count_mismatch",
+                "expected": bound_bytes,
+                "actual": length,
+            })
+        bound_mime = bound.get("mime")
+        if bound_mime and bound_mime != content_type:
+            return self.send_json(409, {
+                "error": "photo_mime_mismatch",
+                "expected": bound_mime,
+                "actual": content_type,
             })
 
         temp_dir = MEDIA_ROOT / "pending"
