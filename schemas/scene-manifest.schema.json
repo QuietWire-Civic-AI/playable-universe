@@ -1,0 +1,126 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://quietwire.ai/schemas/playable-scene-manifest.v0.schema.json",
+  "title": "Playable Universe SceneManifest v0",
+  "description": "Engine-neutral scene description. Rendering engines translate this manifest into local scene objects without becoming authoritative for provenance or temporal truth.",
+  "type": "object",
+  "required": [
+    "schema", "scene_id", "title", "temporal_mode",
+    "spatial_reference", "assets", "entities", "provenance_refs"
+  ],
+  "properties": {
+    "schema": { "const": "playable.scene-manifest.v0" },
+    "scene_id": { "type": "string", "minLength": 1 },
+    "title": { "type": "string", "minLength": 1 },
+    "description": { "type": ["string", "null"] },
+    "temporal_mode": { "enum": ["past", "present", "future"] },
+    "at": { "type": ["string", "null"], "format": "date-time" },
+    "branch_id": { "type": ["string", "null"] },
+    "spatial_reference": {
+      "type": "object",
+      "required": ["kind"],
+      "properties": {
+        "kind": { "enum": ["local_cartesian", "wgs84_anchor", "geospatial_tileset", "abstract"] },
+        "origin": {
+          "type": ["object", "null"],
+          "properties": {
+            "latitude": { "type": "number" },
+            "longitude": { "type": "number" },
+            "elevation_m": { "type": ["number", "null"] }
+          },
+          "additionalProperties": false
+        },
+        "units": { "enum": ["meters", "unitless"] }
+      },
+      "additionalProperties": false
+    },
+    "assets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["asset_id", "role", "format", "uri"],
+        "properties": {
+          "asset_id": { "type": "string" },
+          "role": { "enum": ["scene", "terrain", "avatar", "prop", "audio", "video", "image", "animation", "tileset", "other"] },
+          "format": { "enum": ["gltf", "glb", "usd", "usdz", "3dtiles", "image", "audio", "video", "engine_native", "other"] },
+          "uri": { "type": "string" },
+          "digest": { "type": ["string", "null"] },
+          "rights_refs": { "type": "array", "items": { "type": "string" } },
+          "provenance_refs": { "type": "array", "items": { "type": "string" } }
+        },
+        "additionalProperties": false
+      }
+    },
+    "entities": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["entity_id"],
+        "properties": {
+          "entity_id": { "type": "string" },
+          "persona_id": { "type": ["string", "null"] },
+          "asset_ref": { "type": ["string", "null"] },
+          "transform": {
+            "type": "object",
+            "properties": {
+              "position": {
+                "type": "array",
+                "items": { "type": "number" },
+                "minItems": 3,
+                "maxItems": 3
+              },
+              "rotation_quaternion": {
+                "type": "array",
+                "items": { "type": "number" },
+                "minItems": 4,
+                "maxItems": 4
+              },
+              "scale": {
+                "type": "array",
+                "items": { "type": "number" },
+                "minItems": 3,
+                "maxItems": 3
+              }
+            },
+            "additionalProperties": false
+          },
+          "truth_class": {
+            "enum": [
+              "attested", "observed", "reported", "inferred",
+              "reconstructed", "simulated", "projected", "disputed"
+            ]
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "interaction_zones": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["zone_id", "kind"],
+        "properties": {
+          "zone_id": { "type": "string" },
+          "kind": { "enum": ["walk", "inspect", "talk", "portal", "control", "attest", "branch", "other"] },
+          "target_ref": { "type": ["string", "null"] }
+        },
+        "additionalProperties": false
+      }
+    },
+    "channels": {
+      "type": "object",
+      "properties": {
+        "snapshot_url": { "type": ["string", "null"] },
+        "events_url": { "type": ["string", "null"] },
+        "events_websocket_url": { "type": ["string", "null"] },
+        "intent_url": { "type": ["string", "null"] },
+        "media_room_ref": { "type": ["string", "null"] }
+      },
+      "additionalProperties": false
+    },
+    "provenance_refs": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+    "rights_refs": { "type": "array", "items": { "type": "string" } },
+    "notes": { "type": "array", "items": { "type": "string" } }
+  },
+  "additionalProperties": false
+}
