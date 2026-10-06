@@ -3,8 +3,12 @@ from __future__ import annotations
 
 import hashlib
 import json
+import mimetypes
 import os
+import re
 import sqlite3
+import subprocess
+import tempfile
 import threading
 import time
 import uuid
@@ -12,6 +16,7 @@ from collections import defaultdict, deque
 from datetime import datetime, timezone
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 HOST = os.environ.get("PLAYABLE_INTAKE_HOST", "127.0.0.1")
@@ -20,9 +25,22 @@ DB_PATH = os.environ.get(
     "PLAYABLE_INTAKE_DB",
     "/var/lib/playable-universe/attestation-intake.sqlite3",
 )
+MEDIA_ROOT = Path(os.environ.get(
+    "PLAYABLE_MEDIA_ROOT",
+    "/var/lib/playable-universe/media",
+))
+WORLD_ROOT = Path(os.environ.get(
+    "PLAYABLE_WORLD_ROOT",
+    "/opt/playable-universe/world",
+))
+FFMPEG = os.environ.get("PLAYABLE_FFMPEG", "/usr/bin/ffmpeg")
+
 MAX_BODY = 32 * 1024
+MAX_PHOTO_BODY = 8 * 1024 * 1024
 RATE_LIMIT = 30
 RATE_WINDOW_SECONDS = 3600
+PHOTO_RATE_LIMIT = 12
+PHOTO_RATE_WINDOW_SECONDS = 3600
 
 TOP_LEVEL_KEYS = {
     "schema", "client_id", "created_at", "claim", "witness",
@@ -45,9 +63,12 @@ EVIDENCE_KINDS = {
     "photo_hash", "audio_hash", "video_hash", "document_hash", "other_hash",
 }
 CUSTODY = {"device-local", "qwos-private", "external-reference", "not-retained"}
+PHOTO_MIME = {"image/jpeg", "image/png", "image/webp"}
+HEX64 = re.compile(r"^[0-9a-f]{64}$")
+SAFE_MEDIA_ID = re.compile(r"^media:[0-9a-f-]{36}$")
 
 _rate_lock = threading.Lock()
-_rate: dict[str, deque[float]] = defaultdict(deque)
+_rate: dict[tuple[str, str], deque[float]] = defaultdict(deque)
 
 
 def utcnow() -> str:
@@ -72,6 +93,9 @@ def db() -> sqlite3.Connection:
 
 def init_db() -> None:
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+    MEDIA_ROOT.mkdir(parents=True, exist_ok=True)
+    (MEDIA_ROOT / "pending").mkdir(parents=True, exist_ok=True)
+    (MEDIA_ROOT / "approved").mkdir(parents=True, exist_ok=True)
     with db() as conn:
         conn.execute(
             """
@@ -89,6 +113,27 @@ def init_db() -> None:
         conn.execute(
             "CREATE INDEX IF NOT EXISTS idx_candidates_public "
             "ON candidates(visibility, received_at DESC)"
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS media (
+                media_id TEXT PRIMARY KEY,
+                candidate_id TEXT NOT NULL,
+                source_sha256 TEXT NOT NULL,
+                derivative_sha256 TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                reviewed_at TEXT,
+                status TEXT NOT NULL,
+                content_type TEXT NOT NULL,
+                bytes INTEGER NOT NULL,
+                path TEXT NOT NULL,
+                FOREIGN KEY(candidate_id) REFERENCES candidates(candidate_id)
+            )
+            """
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_media_candidate "
+            "ON media(candidate_id, status, created_at DESC)"
         )
 
 
@@ -172,7 +217,7 @@ def validate_packet(packet: object) -> dict:
         if kind not in EVIDENCE_KINDS:
             raise ValueError("invalid evidence kind")
         digest = clean_str(item.get("sha256"), max_len=64)
-        if len(digest) != 64 or any(c not in "0123456789abcdef" for c in digest):
+        if not HEX64.match(digest):
             raise ValueError("invalid evidence sha256")
         custody = item.get("custody")
         if custody not in CUSTODY:
@@ -264,31 +309,224 @@ def validate_packet(packet: object) -> dict:
 
 
 def public_packet(packet: dict) -> dict:
-    # Preserve the exact packet privately for receipt/hash verification while
-    # avoiding publication of a stable browser-local identifier.
     projected = json.loads(json.dumps(packet))
     projected.pop("client_id", None)
     return projected
 
 
-def rate_allowed(ip: str) -> bool:
+def rate_allowed(ip: str, bucket: str, limit: int, window: int) -> bool:
     now = time.monotonic()
-    cutoff = now - RATE_WINDOW_SECONDS
+    cutoff = now - window
+    key = (bucket, ip)
     with _rate_lock:
-        q = _rate[ip]
+        q = _rate[key]
         while q and q[0] < cutoff:
             q.popleft()
-        if len(q) >= RATE_LIMIT:
+        if len(q) >= limit:
             return False
         q.append(now)
         return True
 
 
+def approved_media_for(conn: sqlite3.Connection, candidate_id: str) -> list[dict]:
+    rows = conn.execute(
+        "SELECT media_id, source_sha256, derivative_sha256, created_at, "
+        "content_type, bytes FROM media "
+        "WHERE candidate_id=? AND status='approved' ORDER BY created_at",
+        (candidate_id,),
+    ).fetchall()
+    return [
+        {
+            "media_id": row["media_id"],
+            "kind": "public_photo_derivative",
+            "source_sha256": row["source_sha256"],
+            "sha256": row["derivative_sha256"],
+            "content_type": row["content_type"],
+            "bytes": row["bytes"],
+            "url": f"/playable/api/v0/media/{row['media_id']}",
+        }
+        for row in rows
+    ]
+
+
+def row_to_public_candidate(conn: sqlite3.Connection, row: sqlite3.Row) -> dict:
+    return {
+        "candidate_id": row["candidate_id"],
+        "received_at": row["received_at"],
+        "status": row["status"],
+        "packet": public_packet(json.loads(row["packet_json"])),
+        "packet_sha256": row["packet_sha256"],
+        "receipt_sha256": row["receipt_sha256"],
+        "media": approved_media_for(conn, row["candidate_id"]),
+    }
+
+
+def photo_hashes(packet: dict) -> set[str]:
+    return {
+        item["sha256"] for item in packet.get("evidence", [])
+        if item.get("kind") == "photo_hash" and HEX64.match(item.get("sha256", ""))
+    }
+
+
+def make_derivative(source: Path, output: Path) -> None:
+    cmd = [
+        FFMPEG,
+        "-v", "error",
+        "-nostdin",
+        "-y",
+        "-threads", "1",
+        "-i", str(source),
+        "-vf", "scale='min(1600,iw)':-2",
+        "-map_metadata", "-1",
+        "-frames:v", "1",
+        "-q:v", "3",
+        str(output),
+    ]
+    subprocess.run(
+        cmd,
+        check=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+        timeout=15,
+    )
+
+
+def read_world_json(relative: str):
+    path = (WORLD_ROOT / relative).resolve()
+    root = WORLD_ROOT.resolve()
+    if root not in path.parents and path != root:
+        raise ValueError("invalid world path")
+    return json.loads(path.read_text())
+
+
+def world_scene_catalog() -> list[dict]:
+    items = []
+    fixtures = [
+        ("past-binbrook", "examples/past-binbrook/scene.json"),
+        ("present-room", "examples/present-room/scene.json"),
+        ("future-transparent-authority", "examples/future-transparent-authority/scene.json"),
+    ]
+    for slug, path in fixtures:
+        try:
+            scene = read_world_json(path)
+        except Exception:
+            continue
+        items.append({
+            "slug": slug,
+            "scene_id": scene.get("scene_id"),
+            "title": scene.get("title"),
+            "description": scene.get("description"),
+            "temporal_mode": scene.get("temporal_mode"),
+            "at": scene.get("at"),
+            "branch_id": scene.get("branch_id"),
+            "manifest_url": f"/playable/api/v0/scenes/{slug}",
+        })
+    return items
+
+
+def world_scene(slug: str):
+    mapping = {
+        "past-binbrook": "examples/past-binbrook/scene.json",
+        "present-room": "examples/present-room/scene.json",
+        "future-transparent-authority": "examples/future-transparent-authority/scene.json",
+    }
+    path = mapping.get(slug)
+    if not path:
+        return None
+    try:
+        return read_world_json(path)
+    except Exception:
+        return None
+
+
+def world_state(slug: str):
+    if slug == "present-room":
+        try:
+            return read_world_json("examples/present-room/state.json")
+        except Exception:
+            return None
+    scene = world_scene(slug)
+    if not scene:
+        return None
+    entities = {}
+    for entity in scene.get("entities", []):
+        entities[entity["entity_id"]] = {
+            "persona_id": entity.get("persona_id"),
+            "transform": entity.get("transform") or {},
+            "state": {},
+            "truth_class": entity.get("truth_class", "reconstructed"),
+            "last_event_id": None,
+        }
+    return {
+        "schema": "playable.world-state.v0",
+        "scene_id": scene["scene_id"],
+        "temporal_mode": scene["temporal_mode"],
+        "branch_id": scene.get("branch_id"),
+        "as_of": scene.get("at") or utcnow(),
+        "sequence": 0,
+        "entities": entities,
+        "provenance_refs": scene.get("provenance_refs", []),
+    }
+
+
+def candidate_world_events(conn: sqlite3.Connection, limit: int = 100) -> list[dict]:
+    rows = conn.execute(
+        "SELECT candidate_id, received_at, packet_json, packet_sha256 "
+        "FROM candidates WHERE visibility='public-candidate' "
+        "ORDER BY received_at ASC LIMIT ?",
+        (limit,),
+    ).fetchall()
+    events = []
+    for sequence, row in enumerate(rows, start=1):
+        packet = public_packet(json.loads(row["packet_json"]))
+        actor_name = packet.get("witness", {}).get("display_name")
+        actor_id = "witness:anonymous"
+        if actor_name:
+            actor_id = "witness:self-asserted:" + hashlib.sha256(
+                actor_name.encode("utf-8")
+            ).hexdigest()[:16]
+        events.append({
+            "schema": "playable.world-event.v0",
+            "event_id": "event:" + row["candidate_id"].split(":", 1)[1],
+            "scene_id": "scene:present-room:fixture-v0",
+            "branch_id": None,
+            "event_type": "attestation.candidate_received",
+            "truth_class": "reported",
+            "temporal_mode": "present",
+            "recorded_at": row["received_at"],
+            "effective_at": packet.get("created_at"),
+            "sequence": sequence,
+            "actor": {
+                "entity_id": actor_id,
+                "persona_id": None,
+                "control_mode": "human",
+            },
+            "targets": [],
+            "payload": {
+                "candidate_id": row["candidate_id"],
+                "claim": packet.get("claim"),
+                "witness": packet.get("witness"),
+                "assurance": packet.get("assurance"),
+                "location": packet.get("location"),
+                "media": approved_media_for(conn, row["candidate_id"]),
+                "packet_sha256": row["packet_sha256"],
+            },
+            "source_refs": [row["candidate_id"]],
+            "attestation_refs": [],
+            "rights_refs": [],
+            "intent_ref": None,
+            "supersedes": [],
+            "notes": [
+                "Public candidate only. Receipt != verification. Candidate != Canon."
+            ],
+        })
+    return events
+
+
 class Handler(BaseHTTPRequestHandler):
-    server_version = "PlayableAttestationIntake/0"
+    server_version = "PlayableAttestationIntake/1"
 
     def log_message(self, fmt, *args):
-        # Do not log packet contents. The default line contains only request metadata.
         super().log_message(fmt, *args)
 
     def send_json(self, status: int, payload: object):
@@ -301,6 +539,22 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def send_file(self, path: Path, content_type: str):
+        size = path.stat().st_size
+        self.send_response(200)
+        self.send_header("Content-Type", content_type)
+        self.send_header("Content-Length", str(size))
+        self.send_header("Cache-Control", "public, max-age=31536000, immutable")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("Content-Security-Policy", "default-src 'none'")
+        self.end_headers()
+        with path.open("rb") as fh:
+            while True:
+                chunk = fh.read(64 * 1024)
+                if not chunk:
+                    break
+                self.wfile.write(chunk)
+
     def client_ip(self) -> str:
         return (
             self.headers.get("X-Real-IP")
@@ -310,11 +564,64 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         parsed = urlparse(self.path)
+
         if parsed.path == "/healthz":
             return self.send_json(200, {
                 "status": "ok",
                 "service": "playable-attestation-intake",
-                "schema": "playable.attestation-intake-health.v0",
+                "schema": "playable.attestation-intake-health.v1",
+                "world_root": str(WORLD_ROOT),
+                "media": "pending-review",
+            })
+
+        if parsed.path == "/v0/world/tiles":
+            try:
+                tiles = read_world_json("data/tiles.json")
+            except Exception as exc:
+                return self.send_json(503, {
+                    "error": "world_tiles_unavailable",
+                    "detail": str(exc)[:200],
+                })
+            return self.send_json(200, {
+                "schema": "playable.world-tile-feed.v0",
+                "items": tiles,
+            })
+
+        if parsed.path == "/v0/scenes":
+            return self.send_json(200, {
+                "schema": "playable.scene-catalog.v0",
+                "items": world_scene_catalog(),
+            })
+
+        scene_match = re.match(r"^/v0/scenes/([a-z0-9-]+)$", parsed.path)
+        if scene_match:
+            slug = scene_match.group(1)
+            scene = world_scene(slug)
+            if not scene:
+                return self.send_json(404, {"error": "scene_not_found"})
+            return self.send_json(200, scene)
+
+        state_match = re.match(r"^/v0/scenes/([a-z0-9-]+)/state$", parsed.path)
+        if state_match:
+            slug = state_match.group(1)
+            state = world_state(slug)
+            if not state:
+                return self.send_json(404, {"error": "scene_not_found"})
+            return self.send_json(200, state)
+
+        events_match = re.match(r"^/v0/scenes/([a-z0-9-]+)/events$", parsed.path)
+        if events_match:
+            slug = events_match.group(1)
+            if slug != "present-room":
+                return self.send_json(200, {
+                    "schema": "playable.world-event-feed.v0",
+                    "items": [],
+                })
+            with db() as conn:
+                events = candidate_world_events(conn)
+            return self.send_json(200, {
+                "schema": "playable.world-event-feed.v0",
+                "items": events,
             })
 
         if parsed.path == "/v0/attestations/public":
@@ -331,20 +638,26 @@ class Handler(BaseHTTPRequestHandler):
                     "ORDER BY received_at DESC LIMIT ?",
                     (limit,),
                 ).fetchall()
+                items = [row_to_public_candidate(conn, row) for row in rows]
             return self.send_json(200, {
                 "schema": "playable.public-attestation-feed.v0",
-                "items": [
-                    {
-                        "candidate_id": row["candidate_id"],
-                        "received_at": row["received_at"],
-                        "status": row["status"],
-                        "packet": public_packet(json.loads(row["packet_json"])),
-                        "packet_sha256": row["packet_sha256"],
-                        "receipt_sha256": row["receipt_sha256"],
-                    }
-                    for row in rows
-                ],
+                "items": items,
             })
+
+        media_match = re.match(r"^/v0/media/(media:[0-9a-f-]{36})$", parsed.path)
+        if media_match:
+            media_id = media_match.group(1)
+            with db() as conn:
+                row = conn.execute(
+                    "SELECT status, content_type, path FROM media WHERE media_id=?",
+                    (media_id,),
+                ).fetchone()
+            if not row or row["status"] != "approved":
+                return self.send_json(404, {"error": "media_not_found"})
+            path = Path(row["path"])
+            if not path.is_file():
+                return self.send_json(404, {"error": "media_file_missing"})
+            return self.send_file(path, row["content_type"])
 
         prefix = "/v0/attestations/"
         if parsed.path.startswith(prefix):
@@ -358,26 +671,32 @@ class Handler(BaseHTTPRequestHandler):
                     "FROM candidates WHERE candidate_id=?",
                     (candidate_id,),
                 ).fetchone()
-            if not row or row["visibility"] != "public-candidate":
-                return self.send_json(404, {"error": "not_found"})
+                if not row or row["visibility"] != "public-candidate":
+                    return self.send_json(404, {"error": "not_found"})
+                item = row_to_public_candidate(conn, row)
             return self.send_json(200, {
                 "schema": "playable.public-attestation-candidate.v0",
-                "candidate_id": row["candidate_id"],
-                "received_at": row["received_at"],
-                "status": row["status"],
-                "packet": json.loads(row["packet_json"]),
-                "packet_sha256": row["packet_sha256"],
-                "receipt_sha256": row["receipt_sha256"],
+                **item,
             })
 
         return self.send_json(404, {"error": "not_found"})
 
     def do_POST(self):
         parsed = urlparse(self.path)
+
+        media_match = re.match(
+            r"^/v0/attestations/(attest:[0-9a-f-]{36})/photo$",
+            parsed.path,
+        )
+        if media_match:
+            return self.handle_photo_upload(media_match.group(1))
+
         if parsed.path != "/v0/attestations":
             return self.send_json(404, {"error": "not_found"})
 
-        if not rate_allowed(self.client_ip()):
+        if not rate_allowed(
+            self.client_ip(), "attest", RATE_LIMIT, RATE_WINDOW_SECONDS
+        ):
             return self.send_json(429, {
                 "error": "rate_limited",
                 "limit": RATE_LIMIT,
@@ -444,6 +763,141 @@ class Handler(BaseHTTPRequestHandler):
 
         return self.send_json(HTTPStatus.CREATED, receipt)
 
+    def handle_photo_upload(self, candidate_id: str):
+        if not rate_allowed(
+            self.client_ip(), "photo", PHOTO_RATE_LIMIT, PHOTO_RATE_WINDOW_SECONDS
+        ):
+            return self.send_json(429, {
+                "error": "photo_rate_limited",
+                "limit": PHOTO_RATE_LIMIT,
+                "window_seconds": PHOTO_RATE_WINDOW_SECONDS,
+            })
+
+        content_type = self.headers.get("Content-Type", "").split(";")[0].strip()
+        if content_type not in PHOTO_MIME:
+            return self.send_json(415, {
+                "error": "unsupported_photo_type",
+                "allowed": sorted(PHOTO_MIME),
+            })
+
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+        except ValueError:
+            return self.send_json(400, {"error": "invalid_content_length"})
+        if length <= 0 or length > MAX_PHOTO_BODY:
+            return self.send_json(413, {
+                "error": "photo_size_out_of_bounds",
+                "max_bytes": MAX_PHOTO_BODY,
+            })
+
+        claimed_source = self.headers.get("X-Photo-Sha256", "").strip().lower()
+        if not HEX64.match(claimed_source):
+            return self.send_json(400, {"error": "x_photo_sha256_required"})
+
+        with db() as conn:
+            candidate = conn.execute(
+                "SELECT visibility, packet_json FROM candidates WHERE candidate_id=?",
+                (candidate_id,),
+            ).fetchone()
+        if not candidate:
+            return self.send_json(404, {"error": "candidate_not_found"})
+        if candidate["visibility"] != "public-candidate":
+            return self.send_json(409, {
+                "error": "photo_publication_requires_public_candidate"
+            })
+        packet = json.loads(candidate["packet_json"])
+        if claimed_source not in photo_hashes(packet):
+            return self.send_json(409, {
+                "error": "photo_digest_not_bound_to_attestation"
+            })
+
+        temp_dir = MEDIA_ROOT / "pending"
+        temp_dir.mkdir(parents=True, exist_ok=True)
+        upload_path = temp_dir / (".upload-" + str(uuid.uuid4()))
+        derivative_temp = temp_dir / (".derivative-" + str(uuid.uuid4()) + ".jpg")
+
+        hasher = hashlib.sha256()
+        remaining = length
+        try:
+            with upload_path.open("wb") as out:
+                while remaining:
+                    chunk = self.rfile.read(min(64 * 1024, remaining))
+                    if not chunk:
+                        raise ValueError("unexpected end of upload")
+                    out.write(chunk)
+                    hasher.update(chunk)
+                    remaining -= len(chunk)
+
+            actual_source = hasher.hexdigest()
+            if actual_source != claimed_source:
+                return self.send_json(409, {
+                    "error": "uploaded_photo_hash_mismatch",
+                    "expected": claimed_source,
+                    "actual": actual_source,
+                })
+
+            try:
+                make_derivative(upload_path, derivative_temp)
+            except subprocess.TimeoutExpired:
+                return self.send_json(422, {"error": "photo_processing_timeout"})
+            except subprocess.CalledProcessError as exc:
+                detail = (exc.stderr or b"").decode("utf-8", "replace")[:300]
+                return self.send_json(422, {
+                    "error": "photo_processing_failed",
+                    "detail": detail,
+                })
+
+            derivative_bytes = derivative_temp.read_bytes()
+            derivative_sha = sha256_hex(derivative_bytes)
+            media_id = "media:" + str(uuid.uuid4())
+            final_path = temp_dir / (media_id.split(":", 1)[1] + ".jpg")
+            derivative_temp.replace(final_path)
+            created_at = utcnow()
+
+            with db() as conn:
+                conn.execute(
+                    "INSERT INTO media "
+                    "(media_id, candidate_id, source_sha256, derivative_sha256, "
+                    "created_at, reviewed_at, status, content_type, bytes, path) "
+                    "VALUES (?, ?, ?, ?, ?, NULL, 'pending', 'image/jpeg', ?, ?)",
+                    (
+                        media_id,
+                        candidate_id,
+                        claimed_source,
+                        derivative_sha,
+                        created_at,
+                        len(derivative_bytes),
+                        str(final_path),
+                    ),
+                )
+
+            return self.send_json(HTTPStatus.CREATED, {
+                "schema": "playable.media-intake-receipt.v0",
+                "media_id": media_id,
+                "candidate_id": candidate_id,
+                "status": "pending",
+                "source_sha256": claimed_source,
+                "derivative_sha256": derivative_sha,
+                "derivative_bytes": len(derivative_bytes),
+                "created_at": created_at,
+                "review_required": True,
+                "note": "Original upload was used only to verify the sealed digest and create a metadata-stripped derivative; it was not retained by this service.",
+            })
+        except ValueError as exc:
+            return self.send_json(400, {
+                "error": "photo_upload_failed",
+                "detail": str(exc)[:200],
+            })
+        finally:
+            try:
+                upload_path.unlink(missing_ok=True)
+            except Exception:
+                pass
+            try:
+                derivative_temp.unlink(missing_ok=True)
+            except Exception:
+                pass
+
 
 def main() -> None:
     init_db()
@@ -455,6 +909,8 @@ def main() -> None:
             "host": HOST,
             "port": PORT,
             "db": DB_PATH,
+            "world_root": str(WORLD_ROOT),
+            "media_root": str(MEDIA_ROOT),
         }),
         flush=True,
     )
