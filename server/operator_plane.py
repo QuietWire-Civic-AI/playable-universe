@@ -647,6 +647,7 @@ def record_receipt(
     decision: str,
     result: dict,
 ) -> dict:
+    projected_result = receipt_projection(request, result)
     receipt = {
         "schema": "playable.operator-receipt.v0",
         "receipt_id": "opreceipt:" + str(uuid.uuid4()),
@@ -661,7 +662,7 @@ def record_receipt(
         "target": request.get("target"),
         "request_sha256": request_sha,
         "decision": decision,
-        "result": result,
+        "result": projected_result,
     }
     with db() as conn:
         conn.execute(
@@ -683,7 +684,7 @@ def record_receipt(
                 receipt["target"],
                 receipt["request_sha256"],
                 receipt["decision"],
-                canonical_bytes(receipt_projection(request, result)).decode("utf-8"),
+                canonical_bytes(projected_result).decode("utf-8"),
             ),
         )
     return receipt
