@@ -43,6 +43,13 @@ h1{
   padding:12px 16px;margin-top:24px;background:rgba(255,255,255,.24)
 }
 .boundary span{color:var(--muted);font-size:.9rem}
+.pilot-note{
+  display:flex;flex-direction:column;gap:4px;margin-top:14px;padding:14px 16px;
+  border:1px solid rgba(76,101,77,.25);border-radius:14px;
+  background:rgba(76,101,77,.07)
+}
+.pilot-note strong{color:var(--moss)}
+.pilot-note span{color:var(--muted);font-size:.88rem}
 .maker{
   display:grid;grid-template-columns:minmax(0,1.45fr) minmax(300px,.75fr);
   gap:22px;align-items:start;padding:18px 0 82px
@@ -62,12 +69,14 @@ textarea,input,select{
 textarea:focus,input:focus,select:focus{border-color:var(--brick);box-shadow:0 0 0 3px rgba(142,63,47,.09)}
 .field small{display:block;color:var(--muted);font-size:.78rem;margin-top:6px}
 .two{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-.capture-card,.location-card{
+.capture-card,.location-card,.provenance-card{
   border:1px solid var(--line);border-radius:18px;padding:16px;margin:20px 0;
   background:rgba(234,217,183,.22)
 }
 .capture-head{display:flex;justify-content:space-between;align-items:center;gap:16px}
-.capture-head h2,.location-card h2,.receipt-panel h2,.stream h2{font:500 1.8rem/1 Georgia,serif;margin:0}
+.capture-head h2,.location-card h2,.provenance-card h2,.receipt-panel h2,.stream h2{font:500 1.8rem/1 Georgia,serif;margin:0}
+.provenance-card>div>p:not(.eyebrow){color:var(--muted);font-size:.86rem;margin:8px 0 16px}
+.provenance-card .field:last-child{margin-bottom:0}
 .camera-button input{position:absolute;opacity:0;pointer-events:none}
 .camera-button span,.primary,.secondary{
   display:inline-flex;align-items:center;justify-content:center;
@@ -294,3 +303,14 @@ footer{
   font-weight:800;
   cursor:pointer;
 }
+
+.provenance-line{
+  margin:10px 0 8px;
+  padding:9px 10px;
+  border-radius:10px;
+  background:rgba(76,101,77,.07);
+  color:var(--muted);
+  font-size:.74rem;
+}
+.provenance-line strong{color:var(--moss)}
+.source-ref-inline{word-break:break-word}
