@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://quietwire.ai/schemas/playable-world-event.v0.schema.json",
+  "title": "Playable Universe WorldEvent v0",
+  "description": "Transport-neutral state-change event. An event may be attested, observed, reported, inferred, reconstructed, simulated, projected, or disputed.",
+  "type": "object",
+  "required": [
+    "schema", "event_id", "scene_id", "event_type",
+    "truth_class", "temporal_mode", "recorded_at", "actor", "payload"
+  ],
+  "properties": {
+    "schema": { "const": "playable.world-event.v0" },
+    "event_id": { "type": "string", "minLength": 1 },
+    "scene_id": { "type": "string", "minLength": 1 },
+    "branch_id": { "type": ["string", "null"] },
+    "event_type": { "type": "string", "minLength": 1 },
+    "truth_class": {
+      "enum": [
+        "attested", "observed", "reported", "inferred",
+        "reconstructed", "simulated", "projected", "disputed"
+      ]
+    },
+    "temporal_mode": { "enum": ["past", "present", "future"] },
+    "recorded_at": { "type": "string", "format": "date-time" },
+    "effective_at": { "type": ["string", "null"], "format": "date-time" },
+    "sequence": { "type": ["integer", "null"], "minimum": 0 },
+    "actor": {
+      "type": "object",
+      "required": ["entity_id"],
+      "properties": {
+        "entity_id": { "type": "string" },
+        "persona_id": { "type": ["string", "null"] },
+        "control_mode": {
+          "enum": ["human", "companion_agent", "system", "historical_simulation", "npc", "mixed", "unknown"]
+        }
+      },
+      "additionalProperties": false
+    },
+    "targets": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "payload": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "source_refs": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "attestation_refs": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "rights_refs": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "intent_ref": { "type": ["string", "null"] },
+    "supersedes": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "notes": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  },
+  "additionalProperties": false
+}
