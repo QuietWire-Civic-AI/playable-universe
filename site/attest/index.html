@@ -128,6 +128,14 @@
             <button type="button" id="share-receipt" class="secondary">Share</button>
           </div>
           <p class="smallprint">Candidate receipt ≠ verification ≠ Canon. It proves what packet the intake received and when.</p>
+
+          <section id="publish-photo-panel" class="publish-photo-panel" hidden>
+            <p class="eyebrow">PHOTO PUBLICATION</p>
+            <h3>Publish the matching photograph?</h3>
+            <p>The server will accept the original only if its SHA-256 exactly matches the photo digest already sealed into this candidate. It creates a metadata-stripped derivative and deletes the uploaded original. The derivative remains pending until local review.</p>
+            <button type="button" id="publish-selected-photo" class="secondary">Upload matching photo for review</button>
+            <p id="publish-photo-status" class="smallprint"></p>
+          </section>
         </div>
       </aside>
     </section>
@@ -144,6 +152,20 @@
       <div id="stream-grid" class="stream-grid">
         <p class="muted">Loading public candidates…</p>
       </div>
+
+      <section id="existing-photo-panel" class="existing-photo-panel" hidden>
+        <p class="eyebrow">BOUND PHOTO · NOT YET PUBLISHED</p>
+        <h3>Attach a matching photo to this existing attest.</h3>
+        <p id="existing-photo-label"></p>
+        <input id="existing-photo-candidate" type="hidden">
+        <input id="existing-photo-sha" type="hidden">
+        <label class="camera-button existing-picker">
+          <input id="existing-photo-file" type="file" accept="image/*">
+          <span>Choose the exact saved photo</span>
+        </label>
+        <button type="button" id="existing-photo-upload" class="secondary">Verify & upload for review</button>
+        <p id="existing-photo-status" class="smallprint"></p>
+      </section>
     </section>
   </main>
 
