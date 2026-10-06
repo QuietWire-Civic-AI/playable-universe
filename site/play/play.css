@@ -70,3 +70,18 @@ footer{
   .legend{grid-template-columns:1fr}
   footer{flex-direction:column;gap:5px}
 }
+
+.inspect-media{margin:10px 0 4px}
+.inspect-media img{
+  display:block;
+  width:100%;
+  max-height:220px;
+  object-fit:cover;
+  border-radius:13px;
+  border:1px solid var(--line);
+}
+.inspect-media .media-note{
+  color:var(--muted);
+  font-size:.7rem;
+  margin:6px 0 0;
+}
