@@ -852,6 +852,13 @@ class Handler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         request_path = unquote(parsed.path)
 
+        publish_match = re.match(
+            r"^/v0/attestations/(attest:[0-9a-f-]{36})/photo/publish$",
+            request_path,
+        )
+        if publish_match:
+            return self.handle_publish_private_photo(publish_match.group(1))
+
         media_match = re.match(
             r"^/v0/attestations/(attest:[0-9a-f-]{36})/photo$",
             request_path,
@@ -928,6 +935,18 @@ class Handler(BaseHTTPRequestHandler):
                     receipt_sha,
                 ),
             )
+            append_candidate_event(
+                conn,
+                candidate_id,
+                "candidate.received",
+                "system",
+                {
+                    "packet_sha256": packet_sha,
+                    "visibility": visibility,
+                    "backfilled": False,
+                },
+                recorded_at=received_at,
+            )
 
         return self.send_json(HTTPStatus.CREATED, receipt)
 
@@ -969,7 +988,18 @@ class Handler(BaseHTTPRequestHandler):
             ).fetchone()
         if not candidate:
             return self.send_json(404, {"error": "candidate_not_found"})
-        if candidate["visibility"] != "public-candidate":
+        custody_mode = self.headers.get(
+            "X-Evidence-Custody", "public-review"
+        ).strip().lower()
+        if custody_mode not in {"private-retain", "public-review"}:
+            return self.send_json(400, {
+                "error": "invalid_evidence_custody",
+                "allowed": ["private-retain", "public-review"],
+            })
+        if (
+            custody_mode == "public-review"
+            and candidate["visibility"] != "public-candidate"
+        ):
             return self.send_json(409, {
                 "error": "photo_publication_requires_public_candidate"
             })
@@ -1024,6 +1054,66 @@ class Handler(BaseHTTPRequestHandler):
                     "actual": actual_source,
                 })
 
+            if custody_mode == "private-retain":
+                private_id = "private-media:" + str(uuid.uuid4())
+                suffix = mimetypes.guess_extension(content_type) or ".bin"
+                final_private = PRIVATE_MEDIA_ROOT / (
+                    private_id.split(":", 1)[1] + suffix
+                )
+                existing = None
+                with db() as conn:
+                    existing = conn.execute(
+                        "SELECT private_media_id, created_at, content_type, bytes "
+                        "FROM private_media "
+                        "WHERE candidate_id=? AND source_sha256=?",
+                        (candidate_id, claimed_source),
+                    ).fetchone()
+                    if existing is None:
+                        upload_path.replace(final_private)
+                        os.chmod(final_private, 0o600)
+                        created_at = utcnow()
+                        conn.execute(
+                            "INSERT INTO private_media "
+                            "(private_media_id, candidate_id, source_sha256, "
+                            "created_at, content_type, bytes, path) "
+                            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                            (
+                                private_id,
+                                candidate_id,
+                                claimed_source,
+                                created_at,
+                                content_type,
+                                length,
+                                str(final_private),
+                            ),
+                        )
+                        append_candidate_event(
+                            conn,
+                            candidate_id,
+                            "evidence.private_custody_received",
+                            "system",
+                            {
+                                "source_sha256": claimed_source,
+                                "bytes": length,
+                                "content_type": content_type,
+                            },
+                        )
+                    else:
+                        private_id = existing["private_media_id"]
+                        created_at = existing["created_at"]
+                return self.send_json(HTTPStatus.CREATED, {
+                    "schema": "playable.private-media-custody-receipt.v0",
+                    "private_media_id": private_id,
+                    "candidate_id": candidate_id,
+                    "status": "privately-retained",
+                    "source_sha256": claimed_source,
+                    "bytes": length,
+                    "content_type": content_type,
+                    "created_at": created_at,
+                    "public": False,
+                    "note": "The exact original is retained under private FC custody and is not exposed by the public media API.",
+                })
+
             try:
                 make_derivative(upload_path, derivative_temp)
             except subprocess.TimeoutExpired:
@@ -1058,6 +1148,18 @@ class Handler(BaseHTTPRequestHandler):
                         str(final_path),
                     ),
                 )
+                append_candidate_event(
+                    conn,
+                    candidate_id,
+                    "evidence.public_derivative_pending",
+                    "system",
+                    {
+                        "media_id": media_id,
+                        "source_sha256": claimed_source,
+                        "derivative_sha256": derivative_sha,
+                        "derivative_bytes": len(derivative_bytes),
+                    },
+                )
 
             return self.send_json(HTTPStatus.CREATED, {
                 "schema": "playable.media-intake-receipt.v0",
@@ -1085,6 +1187,139 @@ class Handler(BaseHTTPRequestHandler):
                 derivative_temp.unlink(missing_ok=True)
             except Exception:
                 pass
+
+
+    def handle_publish_private_photo(self, candidate_id: str):
+        if not rate_allowed(
+            self.client_ip(), "photo-publish", PHOTO_RATE_LIMIT, PHOTO_RATE_WINDOW_SECONDS
+        ):
+            return self.send_json(429, {
+                "error": "photo_publish_rate_limited",
+                "limit": PHOTO_RATE_LIMIT,
+                "window_seconds": PHOTO_RATE_WINDOW_SECONDS,
+            })
+
+        claimed_source = self.headers.get("X-Photo-Sha256", "").strip().lower()
+        if not HEX64.match(claimed_source):
+            return self.send_json(400, {"error": "x_photo_sha256_required"})
+
+        with db() as conn:
+            candidate = conn.execute(
+                "SELECT visibility, packet_json FROM candidates WHERE candidate_id=?",
+                (candidate_id,),
+            ).fetchone()
+            if not candidate:
+                return self.send_json(404, {"error": "candidate_not_found"})
+            if candidate["visibility"] != "public-candidate":
+                return self.send_json(409, {
+                    "error": "photo_publication_requires_public_candidate"
+                })
+            packet = json.loads(candidate["packet_json"])
+            if claimed_source not in photo_hashes(packet):
+                return self.send_json(409, {
+                    "error": "photo_digest_not_bound_to_attestation"
+                })
+            private = conn.execute(
+                "SELECT private_media_id, content_type, bytes, path "
+                "FROM private_media "
+                "WHERE candidate_id=? AND source_sha256=?",
+                (candidate_id, claimed_source),
+            ).fetchone()
+            if not private:
+                return self.send_json(409, {
+                    "error": "private_source_media_not_retained"
+                })
+            existing = conn.execute(
+                "SELECT media_id, status, derivative_sha256, bytes, created_at "
+                "FROM media WHERE candidate_id=? AND source_sha256=? "
+                "AND status IN ('pending','approved') "
+                "ORDER BY created_at DESC LIMIT 1",
+                (candidate_id, claimed_source),
+            ).fetchone()
+            if existing:
+                return self.send_json(200, {
+                    "schema": "playable.media-intake-receipt.v0",
+                    "media_id": existing["media_id"],
+                    "candidate_id": candidate_id,
+                    "status": existing["status"],
+                    "source_sha256": claimed_source,
+                    "derivative_sha256": existing["derivative_sha256"],
+                    "derivative_bytes": existing["bytes"],
+                    "created_at": existing["created_at"],
+                    "review_required": existing["status"] == "pending",
+                    "note": "A public derivative already exists for this bound source.",
+                })
+
+        source = Path(private["path"])
+        if not source.is_file():
+            return self.send_json(409, {
+                "error": "private_source_media_file_missing"
+            })
+
+        temp_dir = MEDIA_ROOT / "pending"
+        temp_dir.mkdir(parents=True, exist_ok=True)
+        derivative_temp = temp_dir / (
+            ".derivative-" + str(uuid.uuid4()) + ".jpg"
+        )
+        try:
+            make_derivative(source, derivative_temp)
+            derivative_bytes = derivative_temp.read_bytes()
+            derivative_sha = sha256_hex(derivative_bytes)
+            media_id = "media:" + str(uuid.uuid4())
+            final_path = temp_dir / (media_id.split(":", 1)[1] + ".jpg")
+            derivative_temp.replace(final_path)
+            created_at = utcnow()
+            with db() as conn:
+                conn.execute(
+                    "INSERT INTO media "
+                    "(media_id, candidate_id, source_sha256, derivative_sha256, "
+                    "created_at, reviewed_at, status, content_type, bytes, path) "
+                    "VALUES (?, ?, ?, ?, ?, NULL, 'pending', 'image/jpeg', ?, ?)",
+                    (
+                        media_id,
+                        candidate_id,
+                        claimed_source,
+                        derivative_sha,
+                        created_at,
+                        len(derivative_bytes),
+                        str(final_path),
+                    ),
+                )
+                append_candidate_event(
+                    conn,
+                    candidate_id,
+                    "evidence.public_derivative_pending",
+                    "system",
+                    {
+                        "media_id": media_id,
+                        "source_sha256": claimed_source,
+                        "derivative_sha256": derivative_sha,
+                        "derivative_bytes": len(derivative_bytes),
+                    },
+                )
+            return self.send_json(HTTPStatus.CREATED, {
+                "schema": "playable.media-intake-receipt.v0",
+                "media_id": media_id,
+                "candidate_id": candidate_id,
+                "status": "pending",
+                "source_sha256": claimed_source,
+                "derivative_sha256": derivative_sha,
+                "derivative_bytes": len(derivative_bytes),
+                "created_at": created_at,
+                "review_required": True,
+                "note": "Public derivative created from the exact privately retained original. Local review is required before display.",
+            })
+        except subprocess.TimeoutExpired:
+            return self.send_json(422, {"error": "photo_processing_timeout"})
+        except subprocess.CalledProcessError as exc:
+            detail = (exc.stderr or b"").decode("utf-8", "replace")[:300]
+            return self.send_json(422, {
+                "error": "photo_processing_failed",
+                "detail": detail,
+            })
+        finally:
+            derivative_temp.unlink(missing_ok=True)
+
 
 
 def main() -> None:
