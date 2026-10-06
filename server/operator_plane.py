@@ -349,7 +349,7 @@ def operation_report_unavailable(ctx: dict, target: str | None, payload: dict) -
             conn,
             target,
             "evidence.source_unavailable_reported",
-            "playable-agent-steward",
+            "playable-" + ctx["role"],
             {
                 "source_sha256": source_sha256,
                 "note": note,
@@ -375,7 +375,7 @@ def operation_corroborate(ctx: dict, target: str | None, payload: dict) -> dict:
             conn,
             target,
             "candidate.corroboration_recorded",
-            "playable-agent-steward",
+            "playable-" + ctx["role"],
             {
                 "note": note,
                 "source_refs": refs,
@@ -399,7 +399,7 @@ def operation_dispute(ctx: dict, target: str | None, payload: dict) -> dict:
             conn,
             target,
             "candidate.dispute_recorded",
-            "playable-agent-steward",
+            "playable-" + ctx["role"],
             {
                 "note": note,
                 "source_refs": refs,
@@ -423,7 +423,7 @@ def operation_propose_cap(ctx: dict, target: str | None, payload: dict) -> dict:
             conn,
             target,
             "promotion.cap_proposed",
-            "playable-agent-steward",
+            "playable-" + ctx["role"],
             {
                 "note": note,
                 "source_refs": refs,
@@ -603,6 +603,43 @@ def resolve_context(identity: dict, policy: dict, interlock: dict) -> dict:
     }
 
 
+def receipt_projection(request: dict, result: dict) -> dict:
+    operation = request["operation"]
+    if operation == "candidate.inspect":
+        return {
+            "candidate_id": result.get("candidate_id"),
+            "status": result.get("status"),
+            "visibility": result.get("visibility"),
+            "lifecycle_count": len(result.get("lifecycle", [])),
+            "private_media_count": len(result.get("private_media", [])),
+            "public_media_count": len(result.get("public_media", [])),
+        }
+    if operation == "operator.receipts":
+        return {"item_count": len(result.get("items", []))}
+    if operation in {"operator.status", "interlock.inspect"}:
+        return {
+            "status": result.get("status"),
+            "actor_role": result.get("actor", {}).get("role"),
+            "policy_version": result.get("policy_version"),
+            "interlock_state": result.get("interlock", {}).get("state"),
+            "allowed_operation_count": len(result.get("allowed_operations", [])),
+        }
+    event = result.get("event") if isinstance(result, dict) else None
+    projected = {
+        "state": result.get("state") if isinstance(result, dict) else None,
+    }
+    for key in ("media_id", "candidate_id", "cap_mutated"):
+        if isinstance(result, dict) and key in result:
+            projected[key] = result[key]
+    if isinstance(event, dict):
+        projected["event_id"] = event.get("event_id")
+        projected["event_type"] = event.get("event_type")
+        projected["recorded_at"] = event.get("recorded_at")
+    if isinstance(result, dict) and result.get("event_id"):
+        projected["event_id"] = result.get("event_id")
+    return projected
+
+
 def record_receipt(
     ctx: dict,
     request: dict,
@@ -646,7 +683,7 @@ def record_receipt(
                 receipt["target"],
                 receipt["request_sha256"],
                 receipt["decision"],
-                canonical_bytes(result).decode("utf-8"),
+                canonical_bytes(receipt_projection(request, result)).decode("utf-8"),
             ),
         )
     return receipt
@@ -796,8 +833,11 @@ def main():
     except FileNotFoundError:
         pass
 
-    server = UnixServer(str(SOCKET_PATH), Handler)
     gid = grp.getgrnam(SOCKET_GROUP).gr_gid
+    os.chown(SOCKET_PATH.parent, -1, gid)
+    os.chmod(SOCKET_PATH.parent, 0o750)
+
+    server = UnixServer(str(SOCKET_PATH), Handler)
     os.chown(SOCKET_PATH, -1, gid)
     os.chmod(SOCKET_PATH, 0o660)
 
