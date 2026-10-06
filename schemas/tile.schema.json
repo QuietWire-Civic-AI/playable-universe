@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://quietwire.ai/schemas/playable-tile.v0.schema.json",
+  "title": "Playable Universe Tile v0",
+  "type": "object",
+  "required": ["id", "title", "layer", "status", "summary", "provenance"],
+  "properties": {
+    "id": {"type": "string", "minLength": 1},
+    "title": {"type": "string", "minLength": 1},
+    "layer": {"enum": ["past", "present", "future"]},
+    "status": {
+      "enum": [
+        "attested", "echo", "observed", "live",
+        "illustrative", "conditional", "reachable_candidate",
+        "scenario", "retired", "contradicted", "realized"
+      ]
+    },
+    "date_label": {"type": "string"},
+    "place": {"type": "string"},
+    "summary": {"type": "string"},
+    "source_ref": {"type": ["string", "null"]},
+    "assumptions": {"type": "array", "items": {"type": "string"}},
+    "design_valley": {"enum": ["inside", "outside", "mixed", "not_applicable"]},
+    "access": {"enum": ["public", "internal", "restricted", "participant_controlled"]},
+    "provenance": {
+      "type": "object",
+      "required": ["kind"],
+      "properties": {
+        "kind": {"enum": ["source", "working_attestation", "projection", "rendering"]},
+        "note": {"type": "string"}
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": true
+}
