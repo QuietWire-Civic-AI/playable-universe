@@ -283,3 +283,14 @@ footer{
     width:100%;
   }
 }
+
+.stream-card .publish-existing-private{
+  margin-top:8px;
+  border:1px solid var(--ink);
+  border-radius:999px;
+  background:var(--ink);
+  color:var(--paper);
+  padding:8px 11px;
+  font-weight:800;
+  cursor:pointer;
+}
