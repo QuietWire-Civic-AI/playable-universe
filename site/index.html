@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="The Playable Universe: attested past, live present, reachable future.">
+  <title>Playable Universe</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="./" aria-label="Playable Universe home">
+      <span class="brand-mark" aria-hidden="true">PU</span>
+      <span><strong>Playable Universe</strong><small>QuietWire field build · v0</small></span>
+    </a>
+    <nav aria-label="Primary">
+      <a href="#valley">Valley</a>
+      <a href="#tiles">Tiles</a>
+      <a href="#rules">Rules</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="hero" id="valley">
+      <div class="hero-copy">
+        <p class="eyebrow">ATTESTED PAST · LIVE PRESENT · REACHABLE FUTURE</p>
+        <h1>Walk the world we can<br><em>actually get to.</em></h1>
+        <p class="lede">The Playable Universe is a navigable semantic world built from things that happened, things happening now, and futures whose path back to the present is visible.</p>
+        <div class="hero-actions">
+          <a class="button primary" href="#tiles">Enter the first tiles</a>
+          <a class="button ghost" href="#rules">See the reachability rules</a>
+        </div>
+      </div>
+
+      <div class="valley-figure" aria-label="A stylized valley showing past, present and future">
+        <svg viewBox="0 0 900 560" role="img" aria-labelledby="valley-title valley-desc">
+          <title id="valley-title">Playable Universe valley</title>
+          <desc id="valley-desc">Attested past at left, a bright present threshold in the center, and branching projected futures to the right.</desc>
+          <defs>
+            <linearGradient id="sky" x1="0" x2="0" y1="0" y2="1">
+              <stop offset="0" stop-color="#f4ead5"/>
+              <stop offset="1" stop-color="#e5d2ad"/>
+            </linearGradient>
+          </defs>
+          <rect width="900" height="560" rx="28" fill="url(#sky)"/>
+          <path d="M0 270 C110 185 195 195 290 310 C365 400 430 405 500 325 C585 225 670 190 900 235 L900 560 L0 560Z" class="ridge far"/>
+          <path d="M0 355 C130 265 230 290 340 395 C410 460 478 462 548 390 C650 284 755 305 900 350 L900 560 L0 560Z" class="ridge near"/>
+          <path d="M348 560 C380 474 418 415 454 369 C477 340 493 319 507 294" class="river"/>
+          <path d="M507 294 C575 260 636 247 700 251" class="branch"/>
+          <path d="M507 294 C585 316 649 339 732 329" class="branch"/>
+          <path d="M507 294 C565 219 633 188 770 172" class="branch faint"/>
+          <circle cx="507" cy="294" r="11" class="present-dot"/>
+          <circle cx="132" cy="331" r="7" class="past-dot"/>
+          <circle cx="224" cy="344" r="6" class="past-dot"/>
+          <circle cx="697" cy="251" r="6" class="future-dot"/>
+          <circle cx="730" cy="329" r="6" class="future-dot outside"/>
+          <text x="74" y="112" class="map-label">ATTESTED PAST</text>
+          <text x="436" y="112" class="map-label present-label">PRESENT</text>
+          <text x="664" y="112" class="map-label">PROJECTED FUTURE</text>
+          <text x="78" y="136" class="map-note">fixed · echoable</text>
+          <text x="421" y="136" class="map-note">becoming</text>
+          <text x="667" y="136" class="map-note">conditional · branching</text>
+          <g class="brick-campus">
+            <rect x="82" y="292" width="74" height="43" rx="2"/>
+            <rect x="95" y="272" width="48" height="23" rx="2"/>
+            <path d="M82 292 L119 262 L156 292"/>
+            <line x1="107" y1="305" x2="107" y2="335"/>
+            <line x1="132" y1="305" x2="132" y2="335"/>
+          </g>
+          <rect x="590" y="202" width="145" height="28" rx="14" class="projection-tag"/>
+          <text x="605" y="221" class="projection-text">reachable branch</text>
+          <rect x="660" y="343" width="154" height="28" rx="14" class="projection-tag outside"/>
+          <text x="675" y="362" class="projection-text">failure branch</text>
+          <rect x="337" y="486" width="236" height="42" rx="21" class="legend-pill"/>
+          <text x="362" y="512" class="legend-text">terrain = conditional reachability</text>
+        </svg>
+        <p class="figure-caption">v0 visual grammar. Terrain is not probability. It represents paths, constraints and branch relationships.</p>
+      </div>
+    </section>
+
+    <section class="three-layers" aria-labelledby="layers-heading">
+      <div class="section-kicker">THE TEMPORAL ENGINE</div>
+      <h2 id="layers-heading">Three different truth conditions.</h2>
+      <div class="layer-grid">
+        <article class="layer-card past">
+          <span class="number">01</span><h3>Playable Past</h3>
+          <p>Original events stay fixed. Visitors may inspect, reconstruct, echo, reinterpret and dispute—without rewriting the source event.</p>
+          <code>attested → echoable</code>
+        </article>
+        <article class="layer-card present">
+          <span class="number">02</span><h3>Playable Present</h3>
+          <p>The moving phase boundary. Possibilities become actions, actions become observations, and selected observations become attestations.</p>
+          <code>possible → observed → attested</code>
+        </article>
+        <article class="layer-card future">
+          <span class="number">03</span><h3>Playable Future</h3>
+          <p>Projected branches remain conditional. Every serious branch shows its anchors, assumptions, transitions and retirement conditions.</p>
+          <code>projected → revised / retired / realized</code>
+        </article>
+      </div>
+    </section>
+
+    <section class="tiles-section" id="tiles" aria-labelledby="tiles-heading">
+      <div class="section-head">
+        <div><div class="section-kicker">LAY TILES DOWN</div><h2 id="tiles-heading">The first world index.</h2></div>
+        <div class="filters" role="group" aria-label="Filter tiles">
+          <button class="filter active" data-layer="all">All</button>
+          <button class="filter" data-layer="past">Past</button>
+          <button class="filter" data-layer="present">Present</button>
+          <button class="filter" data-layer="future">Future</button>
+        </div>
+      </div>
+      <div id="tile-grid" class="tile-grid" aria-live="polite"><p class="loading">Loading the first tiles…</p></div>
+    </section>
+
+    <section class="rules" id="rules" aria-labelledby="rules-heading">
+      <div class="section-kicker">THE VALLEY TEST</div>
+      <h2 id="rules-heading">A future earns detail by showing its route.</h2>
+      <div class="reach-chain">
+        <div><b>1</b><span>Anchor</span><small>What is attested now?</small></div><i>→</i>
+        <div><b>2</b><span>Transitions</span><small>What must actually change?</small></div><i>→</i>
+        <div><b>3</b><span>Assumptions</span><small>What is carrying the branch?</small></div><i>→</i>
+        <div><b>4</b><span>Reachability</span><small>Can we coherently get there?</small></div><i>→</i>
+        <div><b>5</b><span>Design</span><small>Do we choose to deepen that path?</small></div>
+      </div>
+      <blockquote>
+        <p>The Playable Universe contains the reachable future.</p>
+        <p>The QuietWire valley describes the subset we intentionally try to make easier to reach.</p>
+      </blockquote>
+    </section>
+
+    <section class="source-note">
+      <div><span class="section-kicker">SOURCE BEFORE RENDERING</span><h2>This began in 2025.</h2></div>
+      <p>The original Playable Universe corpus defined the Past, Present, 25-year Future, Attested Units, Echoes, Binbrook Hearth and Six Nations Melted. This v0 preserves those source records and adds the 2026 Valley / causal-reachability model rather than rewriting the old material as if it always said the new thing.</p>
+    </section>
+  </main>
+
+  <footer>
+    <span>Playable Universe · QuietWire · v0</span>
+    <span>Rendering is not attestation. Projection is not prediction.</span>
+  </footer>
+  <script src="./app.js" defer></script>
+</body>
+</html>
