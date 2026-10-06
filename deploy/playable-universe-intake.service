@@ -15,6 +15,7 @@ Environment=PLAYABLE_MEDIA_ROOT=/var/lib/playable-universe/media
 Environment=PLAYABLE_PRIVATE_MEDIA_ROOT=/var/lib/playable-universe/private-media
 Environment=PLAYABLE_WORLD_ROOT=/opt/playable-universe/world
 Environment=PLAYABLE_FFMPEG=/usr/bin/ffmpeg
+Environment=PLAYABLE_PUBLIC_ORIGIN=https://playable.quietwire.ai
 ExecStart=/usr/bin/python3 /opt/playable-universe/intake/attestation_intake.py
 Restart=on-failure
 RestartSec=3
