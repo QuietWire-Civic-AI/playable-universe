@@ -187,7 +187,7 @@ for _ in $(seq 1 40); do
   if curl -fsS --resolve "$HOST:443:127.0.0.1" "https://$HOST/" \
        | grep -q "Playable Universe" \
      && curl -fsS --resolve "$HOST:443:127.0.0.1" "https://$HOST/api/healthz" \
-       | python3 -c 'import json,sys; x=json.load(sys.stdin); assert x.get("ok") is True' \
+       | python3 -c 'import json,sys; x=json.load(sys.stdin); assert x.get("status") == "ok"' \
        >/dev/null 2>&1; then
     origin_ready=true
     break
@@ -205,7 +205,7 @@ curl -fsS "https://$HOST/" | grep -q "Playable Universe"
 curl -fsS "https://$HOST/attest/" | grep -q "Make an Attest"
 curl -fsS "https://$HOST/play/" | grep -q "Walk the Valley"
 
-curl -fsS "https://$HOST/api/healthz"   | python3 -c 'import json,sys; x=json.load(sys.stdin); assert x.get("ok") is True'
+curl -fsS "https://$HOST/api/healthz"   | python3 -c 'import json,sys; x=json.load(sys.stdin); assert x.get("status") == "ok"'
 
 curl -fsS "https://$HOST/api/v0/scenes"   | python3 -c 'import json,sys; x=json.load(sys.stdin); assert "items" in x'
 
@@ -215,7 +215,7 @@ curl -fsS "https://fc.quietwire.ai/playable/"   | grep -q "Walk the world we can
 # Verify the certificate actually names the new origin.
 echo | openssl s_client   -connect "$HOST:443"   -servername "$HOST" 2>/dev/null   | openssl x509 -noout -ext subjectAltName   | grep -q "DNS:$HOST"
 
-echo "PLAYABLE_PUBLIC_ORIGIN_V1_1_DEPLOY_OK=true"
+echo "PLAYABLE_PUBLIC_ORIGIN_V1_2_DEPLOY_OK=true"
 echo "canonical=https://playable.quietwire.ai/"
 echo "attest=https://playable.quietwire.ai/attest/"
 echo "play=https://playable.quietwire.ai/play/"
