@@ -1,0 +1,33 @@
+{
+  "schema": "playable.persona.v0",
+  "persona_id": "persona:lumina:room",
+  "entity_id": "companion:lumina",
+  "display_name": "Lumina",
+  "control_mode": "companion_agent",
+  "avatar": {
+    "kind": "glyph",
+    "uri": null,
+    "asset_ref": null
+  },
+  "voice": {
+    "kind": "tts",
+    "profile_ref": "voice:lumina:configured-runtime"
+  },
+  "temporal_envelope": {
+    "not_before": null,
+    "not_after": null,
+    "knowledge_cutoff": null
+  },
+  "disclosure": {
+    "recording": "policy_defined",
+    "replay": "policy_defined",
+    "public_display": "policy_defined"
+  },
+  "rights_refs": [],
+  "provenance_refs": [
+    "docs/END_STATE_ARCHITECTURE_V1.md"
+  ],
+  "notes": [
+    "Companion persona fixture; no claim of legal personhood is made."
+  ]
+}
