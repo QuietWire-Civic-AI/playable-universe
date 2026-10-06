@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+REPO_ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+BUILDER="$REPO_ROOT/deploy/build-fc-oauth-playable-policy.py"
+
 SOURCE_POLICY=/home/rdc-fc/.quiet-hands-common/oauth-executor-policy.v0.json
 ETC_DIR=/etc/quiet-hands
 DEST_POLICY="$ETC_DIR/oauth-executor-policy.fc.v1.json"
@@ -19,6 +22,10 @@ test -f "$SOURCE_POLICY" || {
   echo "REFUSED: source OAuth executor policy missing"
   exit 1
 }
+test -f "$BUILDER" || {
+  echo "REFUSED: OAuth policy builder missing"
+  exit 1
+}
 
 test -S /run/playable-universe/operator.sock || {
   echo "REFUSED: Playable operator socket missing"
@@ -34,54 +41,7 @@ echo "backup=$BACKUP"
 
 install -d -o root -g root -m 0755 "$ETC_DIR"
 
-python3 - "$SOURCE_POLICY" "$DEST_POLICY.new" <<'PY'
-import json,sys
-src,dst=sys.argv[1:3]
-policy=json.load(open(src))
-if policy.get("schema")!="quiet-hands-oauth-executor-policy/v0":
-    raise SystemExit("REFUSED: unsupported OAuth executor policy schema")
-if policy.get("enabled") is not True:
-    raise SystemExit("REFUSED: source OAuth executor policy is not enabled")
-principals=policy.get("principals")
-if not isinstance(principals,list) or not principals:
-    raise SystemExit("REFUSED: no principals in source policy")
-
-rules={
-    "playable_operator_status":["hands.read"],
-    "playable_operator_receipts":["hands.read"],
-    "playable_candidate_inspect":["hands.read"],
-    "playable_evidence_report_unavailable":["hands.execute"],
-    "playable_candidate_corroborate":["hands.execute"],
-    "playable_candidate_dispute":["hands.execute"],
-    "playable_promotion_propose_cap":["hands.execute"],
-}
-
-changed=0
-for principal in principals:
-    nodes=principal.get("nodes") or []
-    tools=principal.get("tools")
-    if "qwos:fc" not in nodes or not isinstance(tools,dict):
-        continue
-    for name,scopes in rules.items():
-        if tools.get(name)!=scopes:
-            tools[name]=scopes
-            changed+=1
-
-if changed==0:
-    # Idempotent re-runs are valid if all rules already exist.
-    found=any(
-        "qwos:fc" in (p.get("nodes") or [])
-        and all((p.get("tools") or {}).get(k)==v for k,v in rules.items())
-        for p in principals
-    )
-    if not found:
-        raise SystemExit("REFUSED: no FC principal eligible for Playable tool admission")
-
-open(dst,"w").write(json.dumps(policy,indent=2,sort_keys=False)+"\n")
-print("semantic_policy_rules="+str(len(rules)))
-print("semantic_policy_changes="+str(changed))
-PY
-
+python3 "$BUILDER" "$SOURCE_POLICY" "$DEST_POLICY.new"
 install -o root -g rdc-fc -m 0640 "$DEST_POLICY.new" "$DEST_POLICY"
 rm -f "$DEST_POLICY.new"
 
