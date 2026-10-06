@@ -263,6 +263,14 @@ def validate_packet(packet: object) -> dict:
     }
 
 
+def public_packet(packet: dict) -> dict:
+    # Preserve the exact packet privately for receipt/hash verification while
+    # avoiding publication of a stable browser-local identifier.
+    projected = json.loads(json.dumps(packet))
+    projected.pop("client_id", None)
+    return projected
+
+
 def rate_allowed(ip: str) -> bool:
     now = time.monotonic()
     cutoff = now - RATE_WINDOW_SECONDS
@@ -330,7 +338,7 @@ class Handler(BaseHTTPRequestHandler):
                         "candidate_id": row["candidate_id"],
                         "received_at": row["received_at"],
                         "status": row["status"],
-                        "packet": json.loads(row["packet_json"]),
+                        "packet": public_packet(json.loads(row["packet_json"])),
                         "packet_sha256": row["packet_sha256"],
                         "receipt_sha256": row["receipt_sha256"],
                     }
