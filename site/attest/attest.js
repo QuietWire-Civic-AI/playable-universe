@@ -26,7 +26,20 @@ const downloadButton = document.querySelector("#download-button");
 const streamGrid = document.querySelector("#stream-grid");
 const refreshStream = document.querySelector("#refresh-stream");
 
+const publishPhotoPanel = document.querySelector("#publish-photo-panel");
+const publishSelectedPhoto = document.querySelector("#publish-selected-photo");
+const publishPhotoStatus = document.querySelector("#publish-photo-status");
+
+const existingPhotoPanel = document.querySelector("#existing-photo-panel");
+const existingPhotoLabel = document.querySelector("#existing-photo-label");
+const existingPhotoCandidate = document.querySelector("#existing-photo-candidate");
+const existingPhotoSha = document.querySelector("#existing-photo-sha");
+const existingPhotoFile = document.querySelector("#existing-photo-file");
+const existingPhotoUpload = document.querySelector("#existing-photo-upload");
+const existingPhotoStatus = document.querySelector("#existing-photo-status");
+
 let photoEvidence = null;
+let selectedPhotoFile = null;
 let photoObjectUrl = null;
 let coarseLocation = null;
 let lastPacket = null;
@@ -45,6 +58,10 @@ localStorage.setItem("playable-client-id", clientId);
 async function sha256Hex(buffer) {
   const digest = await crypto.subtle.digest("SHA-256", buffer);
   return [...new Uint8Array(digest)].map(x => x.toString(16).padStart(2, "0")).join("");
+}
+
+async function fileSha256(file) {
+  return sha256Hex(await file.arrayBuffer());
 }
 
 function bytesLabel(n) {
@@ -121,8 +138,8 @@ photoEl.addEventListener("change", async () => {
   if (!file) return;
   statusEl.textContent = "Hashing photo locally…";
   try {
-    const buffer = await file.arrayBuffer();
-    const digest = await sha256Hex(buffer);
+    const digest = await fileSha256(file);
+    selectedPhotoFile = file;
     photoEvidence = {
       kind: "photo_hash",
       sha256: digest,
@@ -140,9 +157,9 @@ photoEl.addEventListener("change", async () => {
     photoPreview.appendChild(img);
     photoName.textContent = file.name || "Phone photo";
     photoHash.textContent = digest;
-    photoSize.textContent = bytesLabel(file.size) + " · " + (file.type || "unknown MIME") + " · photo remains local";
+    photoSize.textContent = bytesLabel(file.size) + " · " + (file.type || "unknown MIME") + " · photo remains local until you explicitly publish it";
     photoState.classList.remove("empty");
-    statusEl.textContent = "Photo digest ready. The photo itself will not be uploaded.";
+    statusEl.textContent = "Photo digest ready. Selecting a photo still does not upload it.";
   } catch (err) {
     statusEl.textContent = "Could not hash photo: " + err.message;
   }
@@ -207,6 +224,34 @@ downloadButton.addEventListener("click", () => {
   }
 });
 
+async function uploadMatchingPhoto(candidateId, expectedSha, file, statusTarget) {
+  if (!file) throw new Error("Choose the exact saved photo first.");
+  const actual = await fileSha256(file);
+  if (actual !== expectedSha) {
+    throw new Error("This file does not match the SHA-256 sealed into the attestation. Nothing was uploaded.");
+  }
+  statusTarget.textContent = "Digest matches. Uploading original temporarily for server verification and derivative creation…";
+  const response = await fetch(
+    "../api/v0/attestations/" + encodeURIComponent(candidateId) + "/photo",
+    {
+      method:"POST",
+      headers:{
+        "Content-Type": file.type || "image/jpeg",
+        "X-Photo-Sha256": expectedSha
+      },
+      body:file
+    }
+  );
+  const result = await response.json();
+  if (!response.ok) {
+    throw new Error(result.detail || result.error || ("HTTP " + response.status));
+  }
+  statusTarget.textContent =
+    "Photo derivative received as " + result.media_id +
+    ". It is pending local review before public display. The uploaded original was not retained by this service.";
+  return result;
+}
+
 form.addEventListener("submit", async event => {
   event.preventDefault();
   let packet;
@@ -236,12 +281,38 @@ form.addEventListener("submit", async event => {
     receiptSha.textContent = result.receipt_sha256;
     receiptPublic.textContent = result.public_candidate ? "PUBLIC CANDIDATE" : "RECEIPT ONLY";
     renderGlyph(document.querySelector("#receipt-glyph"), result.receipt_sha256);
+
+    publishPhotoPanel.hidden = !(
+      result.public_candidate &&
+      selectedPhotoFile &&
+      photoEvidence &&
+      photoEvidence.kind === "photo_hash"
+    );
+    publishPhotoStatus.textContent = "";
+
     statusEl.textContent = "Attest received. Candidate receipt created.";
     if (result.public_candidate) loadStream();
   } catch (err) {
     statusEl.textContent = "Submission failed: " + err.message + ". You can still download the draft packet.";
   } finally {
     document.querySelector("#submit-button").disabled = false;
+  }
+});
+
+publishSelectedPhoto.addEventListener("click", async () => {
+  if (!lastReceipt || !photoEvidence || !selectedPhotoFile) return;
+  publishSelectedPhoto.disabled = true;
+  try {
+    await uploadMatchingPhoto(
+      lastReceipt.candidate_id,
+      photoEvidence.sha256,
+      selectedPhotoFile,
+      publishPhotoStatus
+    );
+  } catch (err) {
+    publishPhotoStatus.textContent = err.message;
+  } finally {
+    publishSelectedPhoto.disabled = false;
   }
 });
 
@@ -271,6 +342,10 @@ function esc(s) {
   })[ch]);
 }
 
+function photoEvidenceItem(packet) {
+  return (packet.evidence || []).find(e => e.kind === "photo_hash") || null;
+}
+
 async function loadStream() {
   streamGrid.innerHTML = '<p class="muted">Loading public candidates…</p>';
   try {
@@ -287,19 +362,59 @@ async function loadStream() {
       const where = p.location.mode === "coarse"
         ? p.location.latitude.toFixed(3) + ", " + p.location.longitude.toFixed(3)
         : "no location";
+      const media = item.media || [];
+      const photo = media.find(m => m.kind === "public_photo_derivative");
+      const evidencePhoto = photoEvidenceItem(p);
+      const photoHtml = photo
+        ? '<img class="public-photo" loading="lazy" src="' + esc(photo.url) + '" alt="Published attestation photo derivative">'
+        : "";
+      const attachHtml = (!photo && evidencePhoto)
+        ? '<button class="attach-existing" type="button" data-candidate="' + esc(item.candidate_id) +
+          '" data-sha="' + esc(evidencePhoto.sha256) + '">Attach matching photo</button>'
+        : "";
       return '<article class="stream-card">' +
         '<div class="stamp"><span class="unverified">SELF-ATTESTED / UNVERIFIED</span><span>' +
         esc(new Date(item.received_at).toLocaleString()) + '</span></div>' +
+        photoHtml +
         '<p class="claim">' + esc(p.claim.text) + '</p>' +
         '<p class="meta">' + esc(who) + ' · ' + esc(p.claim.kind.replaceAll("_"," ")) +
         ' · ' + esc(where) + ' · ' + p.evidence.length + ' evidence digest(s)</p>' +
         '<code>' + esc(item.candidate_id) + '</code>' +
+        attachHtml +
         '</article>';
     }).join("");
   } catch (err) {
     streamGrid.innerHTML = '<p class="muted">Field stream unavailable: ' + esc(err.message) + '</p>';
   }
 }
+
+streamGrid.addEventListener("click", event => {
+  const button = event.target.closest(".attach-existing");
+  if (!button) return;
+  existingPhotoCandidate.value = button.dataset.candidate;
+  existingPhotoSha.value = button.dataset.sha;
+  existingPhotoLabel.textContent =
+    button.dataset.candidate + " · expected SHA-256 " + button.dataset.sha;
+  existingPhotoFile.value = "";
+  existingPhotoStatus.textContent =
+    "Choose the exact original photo whose digest was sealed into this candidate.";
+  existingPhotoPanel.hidden = false;
+  existingPhotoPanel.scrollIntoView({behavior:"smooth", block:"center"});
+});
+
+existingPhotoUpload.addEventListener("click", async () => {
+  const candidateId = existingPhotoCandidate.value;
+  const expected = existingPhotoSha.value;
+  const file = existingPhotoFile.files && existingPhotoFile.files[0];
+  existingPhotoUpload.disabled = true;
+  try {
+    await uploadMatchingPhoto(candidateId, expected, file, existingPhotoStatus);
+  } catch (err) {
+    existingPhotoStatus.textContent = err.message;
+  } finally {
+    existingPhotoUpload.disabled = false;
+  }
+});
 
 refreshStream.addEventListener("click", loadStream);
 loadStream();
