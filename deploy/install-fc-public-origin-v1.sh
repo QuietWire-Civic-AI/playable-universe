@@ -162,7 +162,7 @@ nginx -t
 systemctl reload nginx
 
 # Canonical public origin must now be real, not a browser/cache alias.
-curl -fsS "https://$HOST/" | grep -q "Walk the world we can actually get to"
+curl -fsS "https://$HOST/" | grep -q "Playable Universe"
 curl -fsS "https://$HOST/attest/" | grep -q "Make an Attest"
 curl -fsS "https://$HOST/play/" | grep -q "Walk the Valley"
 
