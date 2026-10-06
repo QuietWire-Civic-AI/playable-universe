@@ -1,0 +1,38 @@
+[Unit]
+Description=Playable Universe Bounded Operator Plane
+After=network.target playable-universe-intake.service
+Wants=playable-universe-intake.service
+
+[Service]
+Type=simple
+User=quietwire
+Group=quietwire
+SupplementaryGroups=playable-ops
+Environment=PYTHONUNBUFFERED=1
+Environment=PLAYABLE_OPERATOR_DB=/var/lib/playable-universe/attestation-intake.sqlite3
+Environment=PLAYABLE_OPERATOR_SOCKET=/run/playable-universe/operator.sock
+Environment=PLAYABLE_OPERATOR_POLICY=/etc/playable-universe/operator-policy.json
+Environment=PLAYABLE_OPERATOR_INTERLOCK=/etc/playable-universe/operator-interlock.json
+Environment=PLAYABLE_MEDIA_ROOT=/var/lib/playable-universe/media
+Environment=PLAYABLE_OPERATOR_GROUP=playable-ops
+ExecStart=/usr/bin/python3 /opt/playable-universe/operator/operator_plane.py
+Restart=on-failure
+RestartSec=3
+RuntimeDirectory=playable-universe
+RuntimeDirectoryMode=0750
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+ProtectKernelModules=true
+ReadWritePaths=/var/lib/playable-universe /run/playable-universe
+RestrictAddressFamilies=AF_UNIX
+MemoryMax=192M
+TasksMax=24
+CPUQuota=60%
+
+[Install]
+WantedBy=multi-user.target
