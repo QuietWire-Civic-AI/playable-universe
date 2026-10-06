@@ -55,6 +55,22 @@ Deliver:
 Success:
 The current browser can consume the same API a game engine will use.
 
+### Domain operator / standing authority tile — BUILT / DEPLOYMENT PENDING
+
+- Playable-owned Unix operator plane;
+- OS peer identity via `SO_PEERCRED`;
+- root-owned principal/role policy;
+- root-owned NORMAL / CONSTRAINED interlock;
+- standing `rdc-fc -> agent-steward` delegation;
+- append-only corroboration/dispute/evidence events;
+- CAP promotion remains proposal-only;
+- media approval remains local-operator-only until exact-derivative visual review is available;
+- admitted **and refused** calls produce operator receipts.
+
+This is the first explicit correction to an overly high RDC authority boundary:
+
+**RDC/Quiet Hands carries; the domain relying point decides.**
+
 ## Tile 3 — First real 3D world
 
 Use Binbrook or another safe/public environment.
