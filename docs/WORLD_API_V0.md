@@ -124,3 +124,23 @@ Examples:
 - `rights_review_required`
 
 Do not collapse all refusal into HTTP 500.
+
+
+## Live implementation status
+
+The FC reference service now implements the first read-side subset:
+
+- `GET /v0/world/tiles`
+- `GET /v0/scenes`
+- `GET /v0/scenes/{slug}`
+- `GET /v0/scenes/{slug}/state`
+- `GET /v0/scenes/{slug}/events`
+
+The 2D `Walk the Valley` client consumes:
+
+- `/v0/world/tiles` for Past/Present/Future semantic tiles;
+- `/v0/scenes/present-room/events` for public field-attestation events.
+
+This is the first proof that the web game is becoming an adapter over the portable world protocol rather than the source of its own world state.
+
+The full interaction-intent and WebSocket portions remain future Tile 2 work.
