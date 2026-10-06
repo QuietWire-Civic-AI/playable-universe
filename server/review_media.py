@@ -18,6 +18,10 @@ MEDIA_ROOT = Path(os.environ.get(
     "PLAYABLE_MEDIA_ROOT",
     "/var/lib/playable-universe/media",
 ))
+PUBLIC_ORIGIN = os.environ.get(
+    "PLAYABLE_PUBLIC_ORIGIN",
+    "https://playable.quietwire.ai",
+).rstrip("/")
 
 
 def utcnow():
@@ -114,7 +118,7 @@ def approve(media_id: str):
         )
     print("MEDIA_APPROVED=true")
     print("media_id="+media_id)
-    print("public_url=/playable/api/v0/media/"+media_id)
+    print("public_url="+PUBLIC_ORIGIN+"/api/v0/media/"+media_id)
 
 
 def reject(media_id: str):
