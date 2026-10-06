@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://quietwire.ai/schemas/playable-future-projection.v0.schema.json",
+  "title": "Playable Future Projection v0",
+  "type": "object",
+  "required": [
+    "projection_id", "title", "status", "start_anchors",
+    "transitions", "assumptions", "retirement_conditions"
+  ],
+  "properties": {
+    "projection_id": {"type": "string"},
+    "title": {"type": "string"},
+    "status": {
+      "enum": [
+        "illustrative", "conditional", "reachable_candidate",
+        "scenario", "retired", "contradicted", "realized"
+      ]
+    },
+    "horizon": {"type": "string"},
+    "start_anchors": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+    "transitions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["from", "to", "mechanism"],
+        "properties": {
+          "from": {"type": "string"},
+          "to": {"type": "string"},
+          "mechanism": {"type": "string"},
+          "evidence_refs": {"type": "array", "items": {"type": "string"}},
+          "uncertainties": {"type": "array", "items": {"type": "string"}}
+        }
+      }
+    },
+    "assumptions": {"type": "array", "items": {"type": "string"}},
+    "reachability_notes": {"type": "array", "items": {"type": "string"}},
+    "design_valley": {"enum": ["inside", "outside", "mixed"]},
+    "retirement_conditions": {"type": "array", "items": {"type": "string"}},
+    "rights_state_refs": {"type": "array", "items": {"type": "string"}}
+  },
+  "additionalProperties": true
+}
