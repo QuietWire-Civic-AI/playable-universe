@@ -3,6 +3,7 @@ set -euo pipefail
 
 REPO_ROOT=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 ADAPTER_SRC="$REPO_ROOT/integrations/quiet-hands/playable-operator-adapter.js"
+PATCHER="$REPO_ROOT/deploy/patch-fc-quiet-hands-agent.py"
 
 COMMON=/home/rdc-fc/src/quiet-hands-common/src
 RESILIENCE=/home/rdc-fc/src/quiet-hands-resilience/src
@@ -18,6 +19,10 @@ test "$(id -u)" -eq 0 || {
 
 test -f "$ADAPTER_SRC" || {
   echo "REFUSED: adapter source missing"
+  exit 1
+}
+test -f "$PATCHER" || {
+  echo "REFUSED: agent patch helper missing"
   exit 1
 }
 
@@ -48,91 +53,7 @@ echo "backup=$BACKUP"
 install -o rdc-fc -g rdc-fc -m 0644 "$ADAPTER_SRC" "$COMMON/playable-operator-adapter.js"
 install -o rdc-fc -g rdc-fc -m 0644 "$ADAPTER_SRC" "$RESILIENCE/playable-operator-adapter.js"
 
-python3 - "$COMMON/agent.js" "$RESILIENCE/agent.js" <<'PY'
-from pathlib import Path
-import sys
-
-for name in sys.argv[1:]:
-    path=Path(name)
-    text=path.read_text()
-
-    if "PlayableOperatorAdapter" not in text:
-        anchor="import { DesktopCommanderAdapter } from './desktop-commander-adapter.js';"
-        if anchor not in text:
-            raise SystemExit(f"REFUSED: import anchor missing in {path}")
-        text=text.replace(
-            anchor,
-            anchor+"\nimport { PlayableOperatorAdapter } from './playable-operator-adapter.js';",
-            1,
-        )
-
-    old_init="""const adapter = new DesktopCommanderAdapter(config.desktop_commander_root);
-await adapter.initialize();
-const capabilities = await adapter.listTools();
-"""
-    new_init="""const adapter = new DesktopCommanderAdapter(config.desktop_commander_root);
-await adapter.initialize();
-
-const toolAdapters = new Map();
-const capabilities = [];
-
-async function addAdapter(owner) {
-  const tools = await owner.listTools();
-  for (const tool of tools) {
-    if (!tool?.name) continue;
-    if (toolAdapters.has(tool.name)) {
-      throw new Error(`duplicate Quiet Hands tool name from local adapters: ${tool.name}`);
-    }
-    toolAdapters.set(tool.name, owner);
-    capabilities.push(tool);
-  }
-}
-
-await addAdapter(adapter);
-
-const playableOperatorSocket = process.env.QUIET_HANDS_PLAYABLE_OPERATOR_SOCKET ?? '';
-let playableOperatorAdapter = null;
-if (playableOperatorSocket) {
-  playableOperatorAdapter = new PlayableOperatorAdapter(playableOperatorSocket);
-  await playableOperatorAdapter.initialize();
-  await addAdapter(playableOperatorAdapter);
-}
-"""
-    if "const toolAdapters = new Map();" not in text:
-        if old_init not in text:
-            raise SystemExit(f"REFUSED: init anchor missing in {path}")
-        text=text.replace(old_init,new_init,1)
-
-    old_call="""    const result = await adapter.callTool(call.tool_name, call.arguments ?? {}, {
-      quiet_hands_call_id: callId,
-      quiet_hands_node_id: config.node_id
-    });"""
-    new_call="""    const selectedAdapter = toolAdapters.get(call.tool_name);
-    if (!selectedAdapter) {
-      throw new Error(`tool not owned by any local adapter: ${call.tool_name}`);
-    }
-    const result = await selectedAdapter.callTool(call.tool_name, call.arguments ?? {}, {
-      quiet_hands_call_id: callId,
-      quiet_hands_node_id: config.node_id
-    });"""
-    if "const selectedAdapter = toolAdapters.get(call.tool_name);" not in text:
-        if old_call not in text:
-            raise SystemExit(f"REFUSED: call anchor missing in {path}")
-        text=text.replace(old_call,new_call,1)
-
-    old_close="""  await adapter.close();
-  process.exit(0);"""
-    new_close="""  if (playableOperatorAdapter) await playableOperatorAdapter.close();
-  await adapter.close();
-  process.exit(0);"""
-    if "playableOperatorAdapter.close()" not in text:
-        if old_close not in text:
-            raise SystemExit(f"REFUSED: close anchor missing in {path}")
-        text=text.replace(old_close,new_close,1)
-
-    path.write_text(text)
-PY
-
+python3 "$PATCHER" "$COMMON/agent.js" "$RESILIENCE/agent.js"
 chown rdc-fc:rdc-fc "$COMMON/agent.js" "$RESILIENCE/agent.js"
 chmod 0644 "$COMMON/agent.js" "$RESILIENCE/agent.js"
 
