@@ -1,0 +1,24 @@
+{
+  "schema": "playable.interaction-intent.v0",
+  "intent_id": "intent:fixture-power-on:0001",
+  "scene_id": "scene:present-room:fixture-v0",
+  "branch_id": null,
+  "temporal_mode": "present",
+  "actor": {
+    "entity_id": "human:participant-01",
+    "persona_id": "persona:participant-01"
+  },
+  "action": "fixture.power.set",
+  "targets": [
+    "fixture:physical-device-01"
+  ],
+  "created_at": "2026-10-06T01:15:10Z",
+  "payload": {
+    "value": "on"
+  },
+  "authority_refs": [],
+  "rights_refs": [],
+  "notes": [
+    "Submitting this intent does not prove authorization or execution."
+  ]
+}
