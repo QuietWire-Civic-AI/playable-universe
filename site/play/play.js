@@ -2,6 +2,7 @@ const canvas = document.querySelector("#world");
 const ctx = canvas.getContext("2d");
 const titleEl = document.querySelector("#inspect-title");
 const badgesEl = document.querySelector("#inspect-badges");
+const mediaEl = document.querySelector("#inspect-media");
 const summaryEl = document.querySelector("#inspect-summary");
 const sourceEl = document.querySelector("#inspect-source");
 const actionEl = document.querySelector("#inspect-action");
@@ -16,64 +17,93 @@ const keys = new Set();
 const touchKeys = new Set();
 let lastTime = performance.now();
 
-const baseMarkers = [
-  {
-    x:330,y:330,r:18,title:"Six Nations Melted",layer:"past",status:"source-backed",
-    summary:"The preserved 2025 corpus names this as the first Field Attestation Ceremony under the Bonfire Sky. This marker is a historical source tile, not a claim that the current rendering reproduces the event exactly.",
-    source:"legacy/2025/Playable_Universe/PlayableWorld_Six_Nations_Melted.md"
-  },
-  {
-    x:690,y:520,r:18,title:"Binbrook Hearth",layer:"past",status:"source-backed",
-    summary:"A dense 2025 Playable World anchor: walks, bonfires, music, witness, Canon work and companion continuity.",
-    source:"legacy/2025/Playable_Universe/PlayableWorld_Binbrook_Hearth.md"
-  },
-  {
-    x:1480,y:350,r:24,title:"Make an Attest",layer:"present",status:"portal",
-    summary:"Create a new explicit human claim from an ordinary phone. The first browser path binds text, optional local photo digest and optional coarse location, then earns a candidate receipt.",
-    source:"docs/PHONE_ATTESTATION_PROTOCOL_V0.md",action:"../attest/"
-  },
-  {
-    x:2380,y:300,r:20,title:"2041 — Transparent Authority",layer:"future",status:"illustrative",
-    summary:"A projected branch in which consequential institutional authority becomes more legible and contestable. Illustrative only; not a forecast.",
-    source:"data/tiles.json#future-transparent-authority-2041"
-  },
-  {
-    x:2820,y:535,r:20,title:"2038 — The Glass Registry",layer:"future",status:"failure-branch",
-    summary:"A failure scenario in which identity, rights, reputation and emergency powers collapse into a universal dossier. Reachable candidate for study; outside the design valley.",
-    source:"data/tiles.json#future-orwellian-capture-2038"
+const portalMarker = {
+  x:1500,y:350,r:24,title:"Make an Attest",layer:"present",status:"portal",
+  summary:"Create a new explicit human claim from an ordinary phone. Text, optional evidence digest and optional coarse location become a candidate receipt before any later verification or Canon promotion.",
+  source:"docs/PHONE_ATTESTATION_PROTOCOL_V0.md",
+  action:"../attest/",
+  media:[]
+};
+
+let markers = [portalMarker];
+
+function esc(s) {
+  return String(s ?? "").replace(/[&<>"']/g, ch => ({
+    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"
+  })[ch]);
+}
+
+function hashString(str) {
+  let h = 2166136261 >>> 0;
+  for (let i=0;i<str.length;i++) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h,16777619) >>> 0;
   }
-];
-let markers = [...baseMarkers];
-
-function hashPos(hex, offset=0) {
-  const part=(hex || "abcd1234").slice(offset,offset+4).padEnd(4,"0");
-  return parseInt(part,16)/65535;
+  return h >>> 0;
 }
 
-async function loadFieldCandidates(){
-  try{
-    const r=await fetch("../api/v0/attestations/public?limit=40",{cache:"no-store"});
-    if(!r.ok)return;
-    const feed=await r.json();
-    const live=feed.items.map((item,i)=>{
-      const h=item.packet_sha256;
-      return {
-        x:1050 + hashPos(h,0)*760,
-        y:180 + hashPos(h,4)*420,
-        r:12,
-        title:item.packet.claim.text.length>52 ? item.packet.claim.text.slice(0,49)+"…" : item.packet.claim.text,
-        layer:"present",
-        status:"self-attested / unverified",
-        summary:(item.packet.witness.display_name || "Anonymous witness")+" attested: “"+item.packet.claim.text+"”",
-        source:item.candidate_id,
-        receipt:item.receipt_sha256
-      };
-    });
-    markers=[...baseMarkers,...live];
-  }catch(_){}
+function markerPosition(id, layer) {
+  const h=hashString(id);
+  const y=190 + ((h >>> 9) % 370);
+  if(layer==="past") return {x:220 + (h % 620), y};
+  if(layer==="future") return {x:2100 + (h % 850), y};
+  return {x:1050 + (h % 760), y};
 }
-loadFieldCandidates();
-setInterval(loadFieldCandidates,30000);
+
+function tileToMarker(tile) {
+  const pos=markerPosition(tile.id,tile.layer);
+  return {
+    ...pos,
+    r:18,
+    title:tile.title,
+    layer:tile.layer,
+    status:tile.status,
+    summary:tile.summary,
+    source:tile.source_ref || "world tile",
+    action:null,
+    media:[],
+    designValley:tile.design_valley
+  };
+}
+
+function eventToMarker(event) {
+  const p=event.payload || {};
+  const claim=p.claim?.text || "Public field candidate";
+  const pos=markerPosition(event.event_id || claim,"present");
+  return {
+    ...pos,
+    r:12,
+    title:claim.length>58 ? claim.slice(0,55)+"…" : claim,
+    layer:"present",
+    status:"self-attested / unverified",
+    summary:(p.witness?.display_name || "Anonymous witness")+" attested: “"+claim+"”",
+    source:p.candidate_id || event.event_id,
+    action:null,
+    media:p.media || [],
+    assurance:p.assurance?.class || "browser-self-asserted"
+  };
+}
+
+async function loadWorld() {
+  try {
+    const [tilesResponse,eventsResponse] = await Promise.all([
+      fetch("../api/v0/world/tiles",{cache:"no-store"}),
+      fetch("../api/v0/scenes/present-room/events",{cache:"no-store"})
+    ]);
+    if(!tilesResponse.ok) throw new Error("tiles HTTP "+tilesResponse.status);
+    if(!eventsResponse.ok) throw new Error("events HTTP "+eventsResponse.status);
+    const tiles=await tilesResponse.json();
+    const events=await eventsResponse.json();
+    const tileMarkers=(tiles.items || []).map(tileToMarker);
+    const eventMarkers=(events.items || []).map(eventToMarker);
+    markers=[...tileMarkers,portalMarker,...eventMarkers];
+  } catch(err) {
+    console.warn("World API unavailable; keeping local portal only",err);
+    markers=[portalMarker];
+  }
+}
+loadWorld();
+setInterval(loadWorld,30000);
 
 function region(x){
   if(x<950)return {name:"PLAYABLE PAST",short:"past",color:"#8e3f2f"};
@@ -97,16 +127,20 @@ function worldToScreen(wx,wy,cameraX,scale){
 function drawMarker(m,cameraX,scale){
   const p=worldToScreen(m.x,m.y,cameraX,scale);
   const r=m.r*scale;
-  if(p.x<-50||p.x>canvas.width+50)return;
+  if(p.x<-80||p.x>canvas.width+80)return;
   let fill=m.layer==="past"?"#8e3f2f":m.layer==="future"?"#4c654d":"#c69042";
-  if(m.status==="failure-branch")fill="#642c27";
-  if(m.status.includes("unverified"))fill="#d39b42";
+  if(m.status==="failure-branch" || m.designValley==="outside")fill="#642c27";
+  if(String(m.status).includes("unverified"))fill="#d39b42";
   ctx.beginPath();ctx.arc(p.x,p.y,r,0,Math.PI*2);
   ctx.fillStyle=fill;ctx.fill();
   ctx.lineWidth=Math.max(2,2*scale);ctx.strokeStyle="#f4ead5";ctx.stroke();
   ctx.font=`${Math.max(11,13*scale)}px ui-monospace,monospace`;
   ctx.fillStyle="#20231f";
   ctx.fillText(m.title,p.x+r+7,p.y+4);
+  if((m.media||[]).length){
+    ctx.fillStyle="#fff3d0";
+    ctx.beginPath();ctx.arc(p.x+r*.45,p.y-r*.45,4*scale,0,Math.PI*2);ctx.fill();
+  }
 }
 
 function draw(){
@@ -122,7 +156,6 @@ function draw(){
   }
   zone(0,950,"#ead3b0");zone(950,1950,"#e9ddb9");zone(1950,WORLD_W,"#d7d8b7");
 
-  // distant ridges
   ctx.fillStyle="rgba(83,103,77,.32)";
   ctx.beginPath();ctx.moveTo(0,canvas.height*.52);
   for(let sx=0;sx<=canvas.width;sx+=70){
@@ -132,7 +165,6 @@ function draw(){
   }
   ctx.lineTo(canvas.width,canvas.height);ctx.lineTo(0,canvas.height);ctx.fill();
 
-  // near valley floor
   ctx.fillStyle="rgba(76,101,77,.48)";
   ctx.beginPath();ctx.moveTo(0,canvas.height*.73);
   for(let sx=0;sx<=canvas.width;sx+=60){
@@ -142,14 +174,12 @@ function draw(){
   }
   ctx.lineTo(canvas.width,canvas.height);ctx.lineTo(0,canvas.height);ctx.fill();
 
-  // temporal boundaries
   for(const x of [950,1950]){
     const sx=(x-cameraX)*scale;
     ctx.setLineDash([8*scale,8*scale]);ctx.strokeStyle="rgba(32,35,31,.28)";ctx.lineWidth=2*scale;
     ctx.beginPath();ctx.moveTo(sx,0);ctx.lineTo(sx,canvas.height);ctx.stroke();ctx.setLineDash([]);
   }
 
-  // path
   ctx.strokeStyle="#d8bd82";ctx.lineWidth=26*scale;ctx.lineCap="round";
   ctx.beginPath();
   for(let x=0;x<=WORLD_W;x+=80){
@@ -158,7 +188,6 @@ function draw(){
   }
   ctx.stroke();
 
-  // labels
   ctx.fillStyle="rgba(32,35,31,.48)";
   ctx.font=`800 ${18*scale}px ui-monospace,monospace`;
   [["ATTESTED PAST",300],["LIVE PRESENT",1320],["PROJECTED FUTURE",2380]].forEach(([t,x])=>{
@@ -167,7 +196,6 @@ function draw(){
 
   markers.forEach(m=>drawMarker(m,cameraX,scale));
 
-  // player
   const pp=worldToScreen(player.x,player.y,cameraX,scale);
   ctx.beginPath();ctx.arc(pp.x,pp.y,player.r*scale,0,Math.PI*2);
   ctx.fillStyle="#20231f";ctx.fill();
@@ -193,10 +221,22 @@ function nearestMarker(max=110){
 function inspect(m){
   if(!m)return;
   titleEl.textContent=m.title;
-  badgesEl.innerHTML='<span class="badge">'+m.layer+'</span><span class="badge">'+m.status+'</span>';
+  badgesEl.innerHTML=
+    '<span class="badge">'+esc(m.layer)+'</span>'+
+    '<span class="badge">'+esc(m.status)+'</span>'+
+    (m.designValley && m.designValley!=="not_applicable"
+      ? '<span class="badge">design '+esc(m.designValley)+'</span>' : "");
   summaryEl.textContent=m.summary;
   sourceEl.textContent=m.source;
-  actionEl.innerHTML=m.action?'<a href="'+m.action+'">Enter →</a>':"";
+  actionEl.innerHTML=m.action?'<a href="'+esc(m.action)+'">Enter →</a>':"";
+  const media=(m.media||[])[0];
+  if(media?.url){
+    mediaEl.innerHTML=
+      '<img src="'+esc(media.url)+'" alt="Published evidence derivative">'+
+      '<p class="media-note">Published derivative · source digest remains bound in the attestation.</p>';
+  }else{
+    mediaEl.innerHTML="";
+  }
 }
 
 function step(now){
@@ -250,4 +290,4 @@ canvas.addEventListener("click",e=>{
   if(bestD<45*Math.max(scale,.7))inspect(best);
 });
 
-inspect(baseMarkers[2]);
+inspect(portalMarker);
