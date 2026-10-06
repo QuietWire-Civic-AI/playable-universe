@@ -1,0 +1,45 @@
+{
+  "schema": "playable.scene-manifest.v0",
+  "scene_id": "scene:transparent-authority-2041:fixture-v0",
+  "title": "2041 — Transparent Authority",
+  "description": "Illustrative future branch used as a protocol fixture.",
+  "temporal_mode": "future",
+  "at": "2041-10-05T20:00:00Z",
+  "branch_id": "scenario:transparent-authority-2041",
+  "spatial_reference": {
+    "kind": "abstract",
+    "origin": null,
+    "units": "meters"
+  },
+  "assets": [],
+  "entities": [
+    {
+      "entity_id": "institution:civic-authority:illustrative",
+      "persona_id": null,
+      "asset_ref": null,
+      "truth_class": "projected"
+    }
+  ],
+  "interaction_zones": [
+    {
+      "zone_id": "zone:branch-info",
+      "kind": "branch",
+      "target_ref": "future-transparent-authority-2041"
+    }
+  ],
+  "channels": {
+    "snapshot_url": null,
+    "events_url": null,
+    "events_websocket_url": null,
+    "intent_url": null,
+    "media_room_ref": null
+  },
+  "provenance_refs": [
+    "docs/VALLEY_REACHABILITY_MODEL_V0.md",
+    "data/tiles.json#future-transparent-authority-2041"
+  ],
+  "rights_refs": [],
+  "notes": [
+    "Illustrative scenario only; not a forecast."
+  ]
+}
