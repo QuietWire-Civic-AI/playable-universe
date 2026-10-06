@@ -635,57 +635,100 @@ def world_state(slug: str):
     }
 
 
-def candidate_world_events(conn: sqlite3.Connection, limit: int = 100) -> list[dict]:
+def candidate_world_events(conn: sqlite3.Connection, limit: int = 200) -> list[dict]:
     rows = conn.execute(
         "SELECT candidate_id, received_at, packet_json, packet_sha256 "
         "FROM candidates WHERE visibility='public-candidate' "
-        "ORDER BY received_at ASC LIMIT ?",
-        (limit,),
+        "ORDER BY received_at ASC LIMIT 100",
     ).fetchall()
-    events = []
-    for sequence, row in enumerate(rows, start=1):
+
+    pending = []
+    for row in rows:
         packet = public_packet(json.loads(row["packet_json"]))
         actor_name = packet.get("witness", {}).get("display_name")
-        actor_id = "witness:anonymous"
+        witness_actor = "witness:anonymous"
         if actor_name:
-            actor_id = "witness:self-asserted:" + hashlib.sha256(
+            witness_actor = "witness:self-asserted:" + hashlib.sha256(
                 actor_name.encode("utf-8")
             ).hexdigest()[:16]
-        events.append({
-            "schema": "playable.world-event.v0",
-            "event_id": "event:" + row["candidate_id"].split(":", 1)[1],
-            "scene_id": "scene:present-room:fixture-v0",
-            "branch_id": None,
-            "event_type": "attestation.candidate_received",
-            "truth_class": "reported",
-            "temporal_mode": "present",
-            "recorded_at": row["received_at"],
-            "effective_at": packet.get("created_at"),
-            "sequence": sequence,
-            "actor": {
-                "entity_id": actor_id,
-                "persona_id": None,
-                "control_mode": "human",
-            },
-            "targets": [],
-            "payload": {
-                "candidate_id": row["candidate_id"],
-                "claim": packet.get("claim"),
-                "witness": packet.get("witness"),
-                "assurance": packet.get("assurance"),
-                "location": packet.get("location"),
-                "media": approved_media_for(conn, row["candidate_id"]),
-                "packet_sha256": row["packet_sha256"],
-            },
-            "source_refs": [row["candidate_id"]],
-            "attestation_refs": [],
-            "rights_refs": [],
-            "intent_ref": None,
-            "supersedes": [],
-            "notes": [
-                "Public candidate only. Receipt != verification. Candidate != Canon."
-            ],
-        })
+
+        lifecycle = candidate_events_for(conn, row["candidate_id"])
+        for event in lifecycle:
+            etype = event["event_type"]
+            if etype == "candidate.received":
+                payload = {
+                    "candidate_id": row["candidate_id"],
+                    "claim": packet.get("claim"),
+                    "witness": packet.get("witness"),
+                    "assurance": packet.get("assurance"),
+                    "location": packet.get("location"),
+                    "media": approved_media_for(conn, row["candidate_id"]),
+                    "evidence_summary": evidence_summary_for(
+                        conn, row["candidate_id"], packet
+                    ),
+                    "packet_sha256": row["packet_sha256"],
+                }
+                actor = {
+                    "entity_id": witness_actor,
+                    "persona_id": None,
+                    "control_mode": "human",
+                }
+                world_type = "attestation.candidate_received"
+                truth_class = "reported"
+                effective_at = packet.get("created_at")
+            else:
+                payload = {
+                    "candidate_id": row["candidate_id"],
+                    **event["payload"],
+                    "evidence_summary": evidence_summary_for(
+                        conn, row["candidate_id"], packet
+                    ),
+                    "media": approved_media_for(conn, row["candidate_id"]),
+                }
+                actor = {
+                    "entity_id": (
+                        "system:playable-intake"
+                        if event["actor_kind"] == "system"
+                        else "operator:local"
+                    ),
+                    "persona_id": None,
+                    "control_mode": "system",
+                }
+                world_type = etype
+                truth_class = "reported"
+                effective_at = event["recorded_at"]
+
+            pending.append({
+                "_sort": event["recorded_at"],
+                "schema": "playable.world-event.v0",
+                "event_id": "world-" + event["event_id"],
+                "scene_id": "scene:present-room:fixture-v0",
+                "branch_id": None,
+                "event_type": world_type,
+                "truth_class": truth_class,
+                "temporal_mode": "present",
+                "recorded_at": event["recorded_at"],
+                "effective_at": effective_at,
+                "sequence": None,
+                "actor": actor,
+                "targets": [row["candidate_id"]],
+                "payload": payload,
+                "source_refs": [row["candidate_id"]],
+                "attestation_refs": [],
+                "rights_refs": [],
+                "intent_ref": None,
+                "supersedes": [],
+                "notes": [
+                    "Lifecycle events append to the candidate record; the original attestation packet is not rewritten."
+                ],
+            })
+
+    pending.sort(key=lambda item: (item["_sort"], item["event_id"]))
+    events = []
+    for sequence, item in enumerate(pending[:limit], start=1):
+        item.pop("_sort", None)
+        item["sequence"] = sequence
+        events.append(item)
     return events
 
 
