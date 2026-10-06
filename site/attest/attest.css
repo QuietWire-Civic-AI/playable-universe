@@ -157,3 +157,52 @@ footer{
   .actions button{width:100%}
   footer{flex-direction:column}
 }
+
+.publish-photo-panel,
+.existing-photo-panel{
+  margin-top:18px;
+  padding:16px;
+  border:1px solid var(--line);
+  border-radius:16px;
+  background:rgba(198,144,66,.08);
+}
+.publish-photo-panel h3,
+.existing-photo-panel h3{
+  margin:6px 0 8px;
+  font:500 1.35rem/1.1 Georgia,serif;
+}
+.publish-photo-panel p,
+.existing-photo-panel p{
+  color:var(--muted);
+}
+.existing-photo-panel{
+  margin-top:18px;
+}
+.existing-picker{
+  display:inline-flex;
+  margin-right:8px;
+}
+.stream-card img.public-photo{
+  width:100%;
+  aspect-ratio:4/3;
+  object-fit:cover;
+  border-radius:12px;
+  margin:10px 0 12px;
+  border:1px solid var(--line);
+}
+.stream-card .attach-existing{
+  margin-top:10px;
+  border:1px solid var(--ink);
+  border-radius:999px;
+  background:transparent;
+  padding:8px 11px;
+  font-weight:800;
+  cursor:pointer;
+}
+@media(max-width:520px){
+  .existing-picker,
+  .existing-photo-panel .secondary{
+    width:100%;
+    margin:0 0 8px;
+  }
+}
