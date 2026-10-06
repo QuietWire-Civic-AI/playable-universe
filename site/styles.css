@@ -205,3 +205,14 @@ footer {
   .present-dot { animation:pulse 3.4s ease-in-out infinite; transform-origin:center; }
   @keyframes pulse { 0%,100%{opacity:.75} 50%{opacity:1} }
 }
+
+
+.layer-link {
+  display:inline-block;
+  margin-top:14px;
+  color:var(--brick-deep);
+  font-weight:800;
+  font-size:.82rem;
+  text-decoration:none;
+}
+.layer-link:hover { text-decoration:underline; }
