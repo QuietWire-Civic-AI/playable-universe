@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#20231f">
+  <meta name="description" content="Make a Playable Universe attestation from an ordinary phone.">
+  <title>Make an Attest · Playable Universe</title>
+  <link rel="stylesheet" href="./attest.css">
+</head>
+<body>
+  <header class="bar">
+    <a class="back" href="../">← Playable Universe</a>
+    <a href="../play/">Walk the Valley →</a>
+  </header>
+
+  <main>
+    <section class="hero">
+      <p class="eyebrow">PLAYABLE PRESENT · FIELD EDGE</p>
+      <h1>Make an Attest.</h1>
+      <p class="lede">Say what you witness. Bind a photo if you want. Choose whether the candidate stays receipt-only or appears in the public field stream.</p>
+      <div class="boundary">
+        <strong>Making an attest does not prove the claim.</strong>
+        <span>This records the exact assertion, evidence hashes, assurance class, and receipt.</span>
+      </div>
+    </section>
+
+    <section class="maker">
+      <form id="attest-form">
+        <label class="field">
+          <span>What do you attest?</span>
+          <textarea id="claim" maxlength="2000" rows="5" placeholder="I attest that..." required></textarea>
+          <small>Type, or use your phone keyboard's microphone if you prefer to dictate.</small>
+        </label>
+
+        <div class="two">
+          <label class="field">
+            <span>Kind of claim</span>
+            <select id="claim-kind">
+              <option value="witness_statement">Witness statement</option>
+              <option value="condition_statement">Condition</option>
+              <option value="event_statement">Event</option>
+              <option value="place_statement">Place</option>
+              <option value="object_statement">Object</option>
+              <option value="other">Other</option>
+            </select>
+          </label>
+
+          <label class="field">
+            <span>Your name <em>optional</em></span>
+            <input id="witness-name" maxlength="120" autocomplete="name" placeholder="Leave blank for anonymous">
+          </label>
+        </div>
+
+        <section class="capture-card">
+          <div class="capture-head">
+            <div>
+              <p class="eyebrow">OPTIONAL EVIDENCE</p>
+              <h2>Bind a photograph</h2>
+            </div>
+            <label class="camera-button">
+              <input id="photo" type="file" accept="image/*" capture="environment">
+              <span>Take / choose photo</span>
+            </label>
+          </div>
+          <div id="photo-state" class="photo-state empty">
+            <div id="photo-preview" class="preview">No photo selected</div>
+            <div class="photo-meta">
+              <strong id="photo-name">Hash-only v0</strong>
+              <code id="photo-hash">The photo stays on this phone.</code>
+              <small id="photo-size">If selected, its SHA-256 is bound to the attest.</small>
+            </div>
+          </div>
+        </section>
+
+        <section class="location-card">
+          <div>
+            <p class="eyebrow">OPTIONAL LOCATION</p>
+            <h2>Place this roughly</h2>
+            <p>Location is off by default. If you ask for it, the browser reads the device location and this page immediately rounds it to coarse coordinates before submission.</p>
+          </div>
+          <div class="location-actions">
+            <button type="button" id="location-button" class="secondary">Add coarse location</button>
+            <button type="button" id="location-clear" class="text-button" hidden>Clear</button>
+          </div>
+          <div id="location-state" class="location-state">No location attached.</div>
+        </section>
+
+        <label class="public-choice">
+          <input id="public-candidate" type="checkbox">
+          <span>
+            <strong>Show this in the public field stream</strong>
+            <small>Claim text, optional name, coarse location, and evidence digest become public. The photo itself is not uploaded.</small>
+          </span>
+        </label>
+
+        <div class="actions">
+          <button id="submit-button" class="primary" type="submit">Make the attest</button>
+          <button id="download-button" class="secondary" type="button">Download draft JSON</button>
+        </div>
+
+        <p id="form-status" class="form-status" role="status"></p>
+      </form>
+
+      <aside class="receipt-panel">
+        <p class="eyebrow">RECEIPT</p>
+        <div id="receipt-empty" class="receipt-empty">
+          <div class="glyph" id="draft-glyph" aria-hidden="true"></div>
+          <h2>Nothing submitted yet.</h2>
+          <p>Your receipt will bind the server's receive time to the SHA-256 of the canonical attestation packet.</p>
+        </div>
+
+        <div id="receipt-card" class="receipt-card" hidden>
+          <div class="receipt-top">
+            <span class="status-pill">CANDIDATE</span>
+            <span id="receipt-public" class="visibility-pill"></span>
+          </div>
+          <div class="glyph" id="receipt-glyph" aria-hidden="true"></div>
+          <h2 id="receipt-id"></h2>
+          <dl>
+            <div><dt>Received</dt><dd id="receipt-time"></dd></div>
+            <div><dt>Packet SHA-256</dt><dd><code id="packet-sha"></code></dd></div>
+            <div><dt>Receipt SHA-256</dt><dd><code id="receipt-sha"></code></dd></div>
+            <div><dt>Assurance</dt><dd>browser-self-asserted</dd></div>
+          </dl>
+          <div class="receipt-actions">
+            <button type="button" id="copy-receipt" class="secondary">Copy receipt</button>
+            <button type="button" id="share-receipt" class="secondary">Share</button>
+          </div>
+          <p class="smallprint">Candidate receipt ≠ verification ≠ Canon. It proves what packet the intake received and when.</p>
+        </div>
+      </aside>
+    </section>
+
+    <section class="stream" id="stream">
+      <div class="stream-head">
+        <div>
+          <p class="eyebrow">PUBLIC CANDIDATES</p>
+          <h2>Field stream</h2>
+        </div>
+        <button id="refresh-stream" class="secondary" type="button">Refresh</button>
+      </div>
+      <p class="stream-warning">Every item below is a self-attested candidate unless its assurance/status explicitly says otherwise.</p>
+      <div id="stream-grid" class="stream-grid">
+        <p class="muted">Loading public candidates…</p>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <span>Playable Universe · phone attestation v0</span>
+    <span>Claim ≠ proof. Receipt ≠ Canon.</span>
+  </footer>
+
+  <script src="./attest.js" defer></script>
+</body>
+</html>
