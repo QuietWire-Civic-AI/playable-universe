@@ -25,6 +25,15 @@ Deliver:
 Success:
 A third-party developer can generate/render a scene without reading QuietWire's internal repositories.
 
+### Evidence custody lifecycle — live
+
+- exact source photo can be retained privately after receipt;
+- server re-verifies sealed SHA-256, MIME and byte count;
+- browser offers explicit local-save/share paths;
+- source-loss is represented as a later event, not a rewrite;
+- private custody and public derivative publication are separate actions;
+- lifecycle events feed the Playable Present.
+
 ### Evidence sub-tile — live
 
 - universal phone candidate attestations;
