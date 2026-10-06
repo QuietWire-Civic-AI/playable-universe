@@ -1,0 +1,51 @@
+{
+  "schema": "playable.operator-policy.v0",
+  "version": "fc-playable-operator-2026-10-06-v0",
+  "principals": {
+    "rdc-fc": {
+      "role": "agent-steward",
+      "description": "Standing local Playable Universe steward role carried through Quiet Hands/RDC. This is semantic domain authority, not shell/database authority."
+    },
+    "quietwire": {
+      "role": "operator",
+      "description": "Local service/operator role."
+    }
+  },
+  "roles": {
+    "agent-steward": {
+      "allow": [
+        "operator.status",
+        "operator.receipts",
+        "interlock.inspect",
+        "candidate.inspect",
+        "evidence.report_unavailable",
+        "candidate.corroborate",
+        "candidate.dispute",
+        "promotion.propose_cap"
+      ]
+    },
+    "operator": {
+      "allow": [
+        "operator.status",
+        "operator.receipts",
+        "interlock.inspect",
+        "candidate.inspect",
+        "evidence.report_unavailable",
+        "candidate.corroborate",
+        "candidate.dispute",
+        "promotion.propose_cap",
+        "media.review.approve",
+        "media.review.reject"
+      ]
+    }
+  },
+  "constrained_allow": [
+    "operator.status",
+    "operator.receipts",
+    "interlock.inspect",
+    "candidate.inspect",
+    "evidence.report_unavailable",
+    "candidate.corroborate",
+    "candidate.dispute"
+  ]
+}
