@@ -1,0 +1,123 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://quietwire.ai/schemas/playable-mobile-attestation.v0.schema.json",
+  "title": "Playable Universe Mobile Attestation v0",
+  "description": "Portable human attestation packet constructible by an ordinary phone. Creation or intake receipt does not imply verification, Canon, or truth.",
+  "type": "object",
+  "required": [
+    "schema", "client_id", "created_at", "claim", "witness",
+    "assurance", "evidence", "location", "sharing"
+  ],
+  "properties": {
+    "schema": { "const": "playable.mobile-attestation.v0" },
+    "client_id": { "type": "string", "minLength": 8, "maxLength": 128 },
+    "created_at": { "type": "string", "format": "date-time" },
+    "claim": {
+      "type": "object",
+      "required": ["text", "kind"],
+      "properties": {
+        "text": { "type": "string", "minLength": 1, "maxLength": 2000 },
+        "kind": {
+          "enum": [
+            "witness_statement",
+            "condition_statement",
+            "event_statement",
+            "place_statement",
+            "object_statement",
+            "other"
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "witness": {
+      "type": "object",
+      "required": ["mode"],
+      "properties": {
+        "mode": {
+          "enum": [
+            "anonymous",
+            "self_asserted_name",
+            "qwos_device",
+            "institutional_identity"
+          ]
+        },
+        "display_name": { "type": ["string", "null"], "maxLength": 120 },
+        "identity_ref": { "type": ["string", "null"], "maxLength": 300 }
+      },
+      "additionalProperties": false
+    },
+    "assurance": {
+      "type": "object",
+      "required": ["class"],
+      "properties": {
+        "class": {
+          "enum": [
+            "browser-self-asserted",
+            "browser-device-key",
+            "qwos-device-signed",
+            "institution-signed"
+          ]
+        },
+        "signature": { "type": ["object", "null"], "additionalProperties": true }
+      },
+      "additionalProperties": false
+    },
+    "evidence": {
+      "type": "array",
+      "maxItems": 12,
+      "items": {
+        "type": "object",
+        "required": ["kind", "sha256"],
+        "properties": {
+          "kind": { "enum": ["photo_hash", "audio_hash", "video_hash", "document_hash", "other_hash"] },
+          "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+          "mime": { "type": ["string", "null"], "maxLength": 120 },
+          "bytes": { "type": ["integer", "null"], "minimum": 0 },
+          "label": { "type": ["string", "null"], "maxLength": 160 },
+          "custody": {
+            "enum": [
+              "device-local",
+              "qwos-private",
+              "external-reference",
+              "not-retained"
+            ]
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    "location": {
+      "type": "object",
+      "required": ["mode"],
+      "properties": {
+        "mode": { "enum": ["none", "coarse", "exact-private"] },
+        "latitude": { "type": ["number", "null"], "minimum": -90, "maximum": 90 },
+        "longitude": { "type": ["number", "null"], "minimum": -180, "maximum": 180 },
+        "accuracy_m": { "type": ["number", "null"], "minimum": 0 },
+        "place_label": { "type": ["string", "null"], "maxLength": 160 }
+      },
+      "additionalProperties": false
+    },
+    "sharing": {
+      "type": "object",
+      "required": ["candidate_visibility"],
+      "properties": {
+        "candidate_visibility": { "enum": ["receipt-only", "public-candidate"] },
+        "media_disposition": { "const": "hash-only-v0" }
+      },
+      "additionalProperties": false
+    },
+    "refs": {
+      "type": "array",
+      "items": { "type": "string", "maxLength": 500 },
+      "maxItems": 24
+    },
+    "notes": {
+      "type": "array",
+      "items": { "type": "string", "maxLength": 500 },
+      "maxItems": 24
+    }
+  },
+  "additionalProperties": false
+}
