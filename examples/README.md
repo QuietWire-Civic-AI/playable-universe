@@ -23,7 +23,7 @@ Demonstrates:
 - WorldState;
 - join / observation / interaction-intent / refusal-or-execution shape.
 
-The physical fixture is generic. The user's Flipper-node system is the intended first real binding once its exact technical source/interface is located.
+The physical fixture is generic. A real governed physical fixture can become the first binding once its exact technical source/interface and authority boundary are identified.
 
 ## Future
 
