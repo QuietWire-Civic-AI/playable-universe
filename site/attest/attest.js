@@ -2,6 +2,8 @@ const form = document.querySelector("#attest-form");
 const claimEl = document.querySelector("#claim");
 const kindEl = document.querySelector("#claim-kind");
 const nameEl = document.querySelector("#witness-name");
+const provenanceModeEl = document.querySelector("#provenance-mode");
+const provenanceSourceEl = document.querySelector("#provenance-source");
 const photoEl = document.querySelector("#photo");
 const photoState = document.querySelector("#photo-state");
 const photoPreview = document.querySelector("#photo-preview");
@@ -26,6 +28,7 @@ const receiptTime = document.querySelector("#receipt-time");
 const packetSha = document.querySelector("#packet-sha");
 const receiptSha = document.querySelector("#receipt-sha");
 const receiptPublic = document.querySelector("#receipt-public");
+const receiptProvenance = document.querySelector("#receipt-provenance");
 const copyReceipt = document.querySelector("#copy-receipt");
 const shareReceipt = document.querySelector("#share-receipt");
 const downloadButton = document.querySelector("#download-button");
@@ -85,10 +88,24 @@ function esc(s) {
   })[ch]);
 }
 
+function provenanceLabel(mode) {
+  const labels = {
+    direct_observation:"direct observation",
+    own_capture:"own captured source",
+    relayed_report:"relayed report",
+    source_material:"other source material",
+    derived_inference:"derived inference",
+    unknown:"other / uncertain",
+    unspecified:"not recorded"
+  };
+  return labels[mode] || "not recorded";
+}
+
 function buildPacket() {
   const text = claimEl.value.trim();
   if (!text) throw new Error("Say what you attest first.");
   const name = nameEl.value.trim();
+  const provenanceSource = provenanceSourceEl.value.trim();
   return {
     schema: "playable.mobile-attestation.v0",
     client_id: clientId,
@@ -105,6 +122,11 @@ function buildPacket() {
     assurance: {
       class: "browser-self-asserted",
       signature: null
+    },
+    provenance: {
+      mode: provenanceModeEl.value,
+      source_refs: provenanceSource ? [provenanceSource] : [],
+      note: null
     },
     evidence: photoEvidence ? [photoEvidence] : [],
     location: coarseLocation ? {
@@ -387,6 +409,8 @@ form.addEventListener("submit", async event => {
     receiptSha.textContent = result.receipt_sha256;
     receiptPublic.textContent =
       result.public_candidate ? "PUBLIC CANDIDATE" : "RECEIPT ONLY";
+    receiptProvenance.textContent =
+      provenanceLabel(packet.provenance?.mode || "unspecified");
     renderGlyph(document.querySelector("#receipt-glyph"), result.receipt_sha256);
 
     lastPrivateCustody = null;
@@ -473,7 +497,8 @@ copyReceipt.addEventListener("click", async () => {
 shareReceipt.addEventListener("click", async () => {
   if (!lastReceipt) return;
   const text = "Playable Universe attestation receipt\n" +
-    lastReceipt.candidate_id + "\npacket " + lastReceipt.packet_sha256;
+    lastReceipt.candidate_id + "\npacket " + lastReceipt.packet_sha256 +
+    "\nhttps://playable.quietwire.ai/attest/";
   if (navigator.share) {
     try {
       await navigator.share({title:"Playable Universe attestation", text});
@@ -528,6 +553,11 @@ async function loadStream() {
       const evidencePhoto = photoEvidenceItem(p);
       const summary = item.evidence_summary || {};
       const lifecycle = item.lifecycle || [];
+      const provenance = p.provenance || {mode:"unspecified",source_refs:[]};
+      const provenanceSource =
+        Array.isArray(provenance.source_refs) && provenance.source_refs.length
+          ? provenance.source_refs[0]
+          : null;
 
       const photoHtml = photo
         ? '<img class="public-photo" loading="lazy" src="' +
@@ -596,6 +626,12 @@ async function loadStream() {
         esc(p.claim.kind.replaceAll("_"," ")) + ' · ' +
         esc(where) + ' · ' +
         p.evidence.length + ' evidence digest(s)</p>' +
+        '<p class="provenance-line"><strong>How they say they know:</strong> ' +
+        esc(provenanceLabel(provenance.mode)) +
+        (provenanceSource
+          ? ' · <span class="source-ref-inline">' + esc(provenanceSource) + '</span>'
+          : '') +
+        '</p>' +
         stateHtml +
         '<code>' + esc(item.candidate_id) + '</code>' +
         attachHtml +
