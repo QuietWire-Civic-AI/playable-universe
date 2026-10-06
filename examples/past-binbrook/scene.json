@@ -1,0 +1,45 @@
+{
+  "schema": "playable.scene-manifest.v0",
+  "scene_id": "scene:binbrook-hearth:2025-example",
+  "title": "Binbrook Hearth — historical fixture",
+  "description": "Minimal historical scene fixture derived from the preserved 2025 Playable Universe source.",
+  "temporal_mode": "past",
+  "at": "2025-07-08T12:00:00Z",
+  "branch_id": null,
+  "spatial_reference": {
+    "kind": "abstract",
+    "origin": null,
+    "units": "meters"
+  },
+  "assets": [],
+  "entities": [
+    {
+      "entity_id": "place:binbrook-hearth",
+      "persona_id": null,
+      "asset_ref": null,
+      "truth_class": "reconstructed"
+    }
+  ],
+  "interaction_zones": [
+    {
+      "zone_id": "zone:source",
+      "kind": "inspect",
+      "target_ref": "legacy/2025/Playable_Universe/PlayableWorld_Binbrook_Hearth.md"
+    }
+  ],
+  "channels": {
+    "snapshot_url": null,
+    "events_url": null,
+    "events_websocket_url": null,
+    "intent_url": null,
+    "media_room_ref": null
+  },
+  "provenance_refs": [
+    "legacy/2025/Playable_Universe/PlayableWorld_Binbrook_Hearth.md"
+  ],
+  "rights_refs": [],
+  "notes": [
+    "Example only.",
+    "Spatial detail is deliberately absent until a source-backed reconstruction is prepared."
+  ]
+}
