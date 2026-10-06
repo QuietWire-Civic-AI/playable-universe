@@ -194,3 +194,20 @@ Examples:
 The resulting candidates become temporal objects in the Playable Present.
 
 If later accepted/verified, the same objects become anchors for Playable Past and future scenario branches.
+
+
+## Browser capture persistence warning
+
+The first live phone attestation demonstrated that an HTML camera capture can provide a `File` object to the web page **without guaranteeing that the phone saves a durable gallery copy**.
+
+Therefore a hash-only browser workflow can lose source bytes after page/session exit even though the attestation correctly preserves the digest.
+
+The field client now makes custody explicit:
+
+- save/download a local copy;
+- use the phone share sheet to save/share the exact file;
+- or preserve the exact original privately with the candidate.
+
+Private retention is a later lifecycle event and does not rewrite the original attestation packet.
+
+See [Evidence Custody and Lifecycle v1](EVIDENCE_CUSTODY_LIFECYCLE_V1.md).
