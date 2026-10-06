@@ -2,7 +2,9 @@
 
 **Status:** v0 field build  
 **Origin:** QuietWire Playable Universe work, 2025; Valley / reachability expansion, 2026  
-**Working stewards:** Chris Blask + Lumina
+**Working stewards:** Chris Blask + Lumina  
+**Canonical public origin:** https://playable.quietwire.ai/  
+**Current host:** FC (`qwos:fc`); hosting node is an implementation detail, not the public identity.
 
 The Playable Universe is a navigable semantic world built from attested experience, the live present, and explicitly projected futures.
 
