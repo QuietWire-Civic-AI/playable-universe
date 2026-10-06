@@ -1,0 +1,33 @@
+{
+  "schema": "playable.world-event.v0",
+  "event_id": "event:fixture-observed-0002",
+  "scene_id": "scene:present-room:fixture-v0",
+  "branch_id": null,
+  "event_type": "object.state_changed",
+  "truth_class": "observed",
+  "temporal_mode": "present",
+  "recorded_at": "2026-10-06T01:15:12Z",
+  "effective_at": "2026-10-06T01:15:12Z",
+  "sequence": 4,
+  "actor": {
+    "entity_id": "system:physical-fixture-observer",
+    "persona_id": null,
+    "control_mode": "system"
+  },
+  "targets": [
+    "fixture:physical-device-01"
+  ],
+  "payload": {
+    "power": "on"
+  },
+  "source_refs": [
+    "source:physical-fixture-observer:reading-0002"
+  ],
+  "attestation_refs": [],
+  "rights_refs": [],
+  "intent_ref": "intent:fixture-power-on:0001",
+  "supersedes": [],
+  "notes": [
+    "The observed state is distinct from the preceding intent."
+  ]
+}
