@@ -1,0 +1,25 @@
+[Unit]
+Description=Playable Universe Attestation Intake
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=quietwire
+Group=quietwire
+Environment=PYTHONUNBUFFERED=1
+Environment=PLAYABLE_INTAKE_HOST=127.0.0.1
+Environment=PLAYABLE_INTAKE_PORT=18270
+Environment=PLAYABLE_INTAKE_DB=/var/lib/playable-universe/attestation-intake.sqlite3
+ExecStart=/usr/bin/python3 /opt/playable-universe/intake/attestation_intake.py
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/playable-universe
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
+[Install]
+WantedBy=multi-user.target
