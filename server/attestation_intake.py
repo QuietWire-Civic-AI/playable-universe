@@ -52,7 +52,7 @@ PHOTO_RATE_WINDOW_SECONDS = 3600
 
 TOP_LEVEL_KEYS = {
     "schema", "client_id", "created_at", "claim", "witness",
-    "assurance", "evidence", "location", "sharing", "refs", "notes",
+    "assurance", "provenance", "evidence", "location", "sharing", "refs", "notes",
 }
 WITNESS_MODES = {
     "anonymous", "self_asserted_name", "qwos_device", "institutional_identity"
@@ -64,6 +64,10 @@ ASSURANCE_CLASSES = {
 CLAIM_KINDS = {
     "witness_statement", "condition_statement", "event_statement",
     "place_statement", "object_statement", "other",
+}
+PROVENANCE_MODES = {
+    "direct_observation", "own_capture", "relayed_report",
+    "source_material", "derived_inference", "unknown", "unspecified",
 }
 VISIBILITIES = {"receipt-only", "public-candidate"}
 LOCATION_MODES = {"none", "coarse", "exact-private"}
@@ -287,6 +291,37 @@ def validate_packet(packet: object) -> dict:
     if signature is not None and not isinstance(signature, dict):
         raise ValueError("signature must be an object or null")
 
+    provenance = packet.get("provenance")
+    if provenance is None:
+        provenance = {
+            "mode": "unspecified",
+            "source_refs": [],
+            "note": None,
+        }
+    if not isinstance(provenance, dict):
+        raise ValueError("provenance must be an object")
+    provenance_unknown = set(provenance) - {"mode", "source_refs", "note"}
+    if provenance_unknown:
+        raise ValueError(
+            "unknown provenance fields: " +
+            ", ".join(sorted(provenance_unknown))
+        )
+    provenance_mode = provenance.get("mode")
+    if provenance_mode not in PROVENANCE_MODES:
+        raise ValueError("invalid provenance mode")
+    provenance_refs = provenance.get("source_refs") or []
+    if not isinstance(provenance_refs, list) or len(provenance_refs) > 12:
+        raise ValueError(
+            "provenance source_refs must be an array of at most 12 items"
+        )
+    provenance_refs = [
+        clean_str(value, max_len=500)
+        for value in provenance_refs
+    ]
+    provenance_note = provenance.get("note")
+    if provenance_note is not None:
+        provenance_note = clean_str(provenance_note, max_len=500)
+
     evidence = packet.get("evidence")
     if not isinstance(evidence, list) or len(evidence) > 12:
         raise ValueError("evidence must be an array of at most 12 items")
@@ -371,6 +406,11 @@ def validate_packet(packet: object) -> dict:
         "assurance": {
             "class": assurance_class,
             "signature": signature,
+        },
+        "provenance": {
+            "mode": provenance_mode,
+            "source_refs": provenance_refs,
+            "note": provenance_note,
         },
         "evidence": clean_evidence,
         "location": {
@@ -671,6 +711,7 @@ def candidate_world_events(conn: sqlite3.Connection, limit: int = 200) -> list[d
                     "claim": packet.get("claim"),
                     "witness": packet.get("witness"),
                     "assurance": packet.get("assurance"),
+                    "provenance": packet.get("provenance"),
                     "location": packet.get("location"),
                     "media": approved_media_for(conn, row["candidate_id"]),
                     "evidence_summary": evidence_summary_for(
