@@ -29,6 +29,10 @@ MEDIA_ROOT = Path(os.environ.get(
     "PLAYABLE_MEDIA_ROOT",
     "/var/lib/playable-universe/media",
 ))
+PRIVATE_MEDIA_ROOT = Path(os.environ.get(
+    "PLAYABLE_PRIVATE_MEDIA_ROOT",
+    "/var/lib/playable-universe/private-media",
+))
 WORLD_ROOT = Path(os.environ.get(
     "PLAYABLE_WORLD_ROOT",
     "/opt/playable-universe/world",
@@ -94,6 +98,8 @@ def db() -> sqlite3.Connection:
 def init_db() -> None:
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
     MEDIA_ROOT.mkdir(parents=True, exist_ok=True)
+    PRIVATE_MEDIA_ROOT.mkdir(parents=True, exist_ok=True)
+    os.chmod(PRIVATE_MEDIA_ROOT, 0o700)
     (MEDIA_ROOT / "pending").mkdir(parents=True, exist_ok=True)
     (MEDIA_ROOT / "approved").mkdir(parents=True, exist_ok=True)
     with db() as conn:
@@ -135,6 +141,71 @@ def init_db() -> None:
             "CREATE INDEX IF NOT EXISTS idx_media_candidate "
             "ON media(candidate_id, status, created_at DESC)"
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS private_media (
+                private_media_id TEXT PRIMARY KEY,
+                candidate_id TEXT NOT NULL,
+                source_sha256 TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                content_type TEXT NOT NULL,
+                bytes INTEGER NOT NULL,
+                path TEXT NOT NULL,
+                UNIQUE(candidate_id, source_sha256),
+                FOREIGN KEY(candidate_id) REFERENCES candidates(candidate_id)
+            )
+            """
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_private_media_candidate "
+            "ON private_media(candidate_id, created_at DESC)"
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS candidate_events (
+                event_id TEXT PRIMARY KEY,
+                candidate_id TEXT NOT NULL,
+                event_type TEXT NOT NULL,
+                recorded_at TEXT NOT NULL,
+                actor_kind TEXT NOT NULL,
+                payload_json TEXT NOT NULL,
+                FOREIGN KEY(candidate_id) REFERENCES candidates(candidate_id)
+            )
+            """
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_candidate_events "
+            "ON candidate_events(candidate_id, recorded_at ASC)"
+        )
+        existing = conn.execute(
+            "SELECT candidate_id, received_at, visibility, packet_sha256 "
+            "FROM candidates"
+        ).fetchall()
+        for row in existing:
+            already = conn.execute(
+                "SELECT 1 FROM candidate_events "
+                "WHERE candidate_id=? AND event_type='candidate.received' LIMIT 1",
+                (row["candidate_id"],),
+            ).fetchone()
+            if already:
+                continue
+            event_id = "cevent:" + str(uuid.uuid4())
+            payload = {
+                "packet_sha256": row["packet_sha256"],
+                "visibility": row["visibility"],
+                "backfilled": True,
+            }
+            conn.execute(
+                "INSERT INTO candidate_events "
+                "(event_id, candidate_id, event_type, recorded_at, actor_kind, payload_json) "
+                "VALUES (?, ?, 'candidate.received', ?, 'system', ?)",
+                (
+                    event_id,
+                    row["candidate_id"],
+                    row["received_at"],
+                    canonical_bytes(payload).decode("utf-8"),
+                ),
+            )
 
 
 def clean_str(value, *, max_len: int, allow_empty: bool = False):
@@ -328,6 +399,96 @@ def rate_allowed(ip: str, bucket: str, limit: int, window: int) -> bool:
         return True
 
 
+def append_candidate_event(
+    conn: sqlite3.Connection,
+    candidate_id: str,
+    event_type: str,
+    actor_kind: str,
+    payload: dict,
+    *,
+    recorded_at: str | None = None,
+) -> dict:
+    event = {
+        "event_id": "cevent:" + str(uuid.uuid4()),
+        "candidate_id": candidate_id,
+        "event_type": event_type,
+        "recorded_at": recorded_at or utcnow(),
+        "actor_kind": actor_kind,
+        "payload": payload,
+    }
+    conn.execute(
+        "INSERT INTO candidate_events "
+        "(event_id, candidate_id, event_type, recorded_at, actor_kind, payload_json) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        (
+            event["event_id"],
+            candidate_id,
+            event_type,
+            event["recorded_at"],
+            actor_kind,
+            canonical_bytes(payload).decode("utf-8"),
+        ),
+    )
+    return event
+
+
+def candidate_events_for(conn: sqlite3.Connection, candidate_id: str) -> list[dict]:
+    rows = conn.execute(
+        "SELECT event_id, event_type, recorded_at, actor_kind, payload_json "
+        "FROM candidate_events WHERE candidate_id=? "
+        "ORDER BY recorded_at ASC, event_id ASC",
+        (candidate_id,),
+    ).fetchall()
+    return [
+        {
+            "event_id": row["event_id"],
+            "event_type": row["event_type"],
+            "recorded_at": row["recorded_at"],
+            "actor_kind": row["actor_kind"],
+            "payload": json.loads(row["payload_json"]),
+        }
+        for row in rows
+    ]
+
+
+def private_media_for(conn: sqlite3.Connection, candidate_id: str) -> list[dict]:
+    rows = conn.execute(
+        "SELECT private_media_id, source_sha256, created_at, content_type, bytes "
+        "FROM private_media WHERE candidate_id=? ORDER BY created_at ASC",
+        (candidate_id,),
+    ).fetchall()
+    return [
+        {
+            "private_media_id": row["private_media_id"],
+            "source_sha256": row["source_sha256"],
+            "created_at": row["created_at"],
+            "content_type": row["content_type"],
+            "bytes": row["bytes"],
+        }
+        for row in rows
+    ]
+
+
+def evidence_summary_for(conn: sqlite3.Connection, candidate_id: str, packet: dict) -> dict:
+    bound = [
+        item for item in packet.get("evidence", [])
+        if item.get("kind") == "photo_hash"
+    ]
+    private = private_media_for(conn, candidate_id)
+    public = approved_media_for(conn, candidate_id)
+    events = candidate_events_for(conn, candidate_id)
+    unavailable = [
+        event for event in events
+        if event["event_type"] == "evidence.source_unavailable_reported"
+    ]
+    return {
+        "bound_photo_count": len(bound),
+        "private_retained_count": len(private),
+        "public_derivative_count": len(public),
+        "source_unavailable_reported_count": len(unavailable),
+    }
+
+
 def approved_media_for(conn: sqlite3.Connection, candidate_id: str) -> list[dict]:
     rows = conn.execute(
         "SELECT media_id, source_sha256, derivative_sha256, created_at, "
@@ -350,14 +511,19 @@ def approved_media_for(conn: sqlite3.Connection, candidate_id: str) -> list[dict
 
 
 def row_to_public_candidate(conn: sqlite3.Connection, row: sqlite3.Row) -> dict:
+    packet = public_packet(json.loads(row["packet_json"]))
     return {
         "candidate_id": row["candidate_id"],
         "received_at": row["received_at"],
         "status": row["status"],
-        "packet": public_packet(json.loads(row["packet_json"])),
+        "packet": packet,
         "packet_sha256": row["packet_sha256"],
         "receipt_sha256": row["receipt_sha256"],
         "media": approved_media_for(conn, row["candidate_id"]),
+        "evidence_summary": evidence_summary_for(
+            conn, row["candidate_id"], packet
+        ),
+        "lifecycle": candidate_events_for(conn, row["candidate_id"]),
     }
 
 
