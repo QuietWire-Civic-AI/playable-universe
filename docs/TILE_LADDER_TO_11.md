@@ -12,7 +12,7 @@ Each tile should leave something usable behind.
 - temporal truth distinction;
 - Valley / reachability language.
 
-## Tile 1 — Portable world protocol
+## Tile 1 — Portable world protocol — SUBSTANTIALLY LIVE
 
 Deliver:
 - `WorldEvent` schema;
@@ -25,7 +25,15 @@ Deliver:
 Success:
 A third-party developer can generate/render a scene without reading QuietWire's internal repositories.
 
-## Tile 2 — World API v0
+### Evidence sub-tile — live
+
+- universal phone candidate attestations;
+- local photo SHA binding;
+- digest-verified derivative publication;
+- pending local media review;
+- approved evidence rendered in field/game clients.
+
+## Tile 2 — World API v0 — READ SIDE LIVE / INTERACTION SIDE NEXT
 
 Deliver:
 - `GET /worlds`
