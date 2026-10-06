@@ -4,7 +4,11 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#20231f">
-  <meta name="description" content="Make a Playable Universe attestation from an ordinary phone.">
+  <meta name="description" content="Make a Playable Universe attestation from an ordinary phone. Say what you witness, record how you know it, and optionally bind evidence.">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Playable Universe · Make an Attest">
+  <meta property="og:description" content="Say what you witness. Tell us how you know. Add evidence if you want. A claim is recorded — not declared true.">
+  <meta property="og:url" content="https://playable.quietwire.ai/attest/">
   <title>Make an Attest · Playable Universe</title>
   <link rel="stylesheet" href="./attest.css">
 </head>
@@ -18,10 +22,14 @@
     <section class="hero">
       <p class="eyebrow">PLAYABLE PRESENT · FIELD EDGE</p>
       <h1>Make an Attest.</h1>
-      <p class="lede">Say what you witness. Bind a photo if you want. Choose whether the candidate stays receipt-only or appears in the public field stream.</p>
+      <p class="lede">Say what you witness. Tell us how you know it. Bind a photo if you want. Choose whether the candidate stays receipt-only or appears in the public field stream.</p>
       <div class="boundary">
         <strong>Making an attest does not prove the claim.</strong>
-        <span>This records the exact assertion, evidence hashes, assurance class, and receipt.</span>
+        <span>This records the exact assertion, your stated provenance, evidence hashes, assurance class, and receipt.</span>
+      </div>
+      <div class="pilot-note">
+        <strong>Public field test:</strong>
+        <span>Try something small and boring. “I am sitting in this room.” “The coffee cup is blue.” “I saw this tree down across the path.” The point is to make an inspectable claim, not an impressive one.</span>
       </div>
     </section>
 
@@ -51,6 +59,30 @@
             <input id="witness-name" maxlength="120" autocomplete="name" placeholder="Leave blank for anonymous">
           </label>
         </div>
+
+        <section class="provenance-card">
+          <div>
+            <p class="eyebrow">PROVENANCE</p>
+            <h2>How do you know this?</h2>
+            <p>This does not make the claim true. It records where you say the claim came from so later corroboration can distinguish independent observations from echoes of the same source.</p>
+          </div>
+          <label class="field">
+            <span>Basis for this claim</span>
+            <select id="provenance-mode" required>
+              <option value="direct_observation">I am directly observing / experiencing it</option>
+              <option value="own_capture">I captured the source evidence myself</option>
+              <option value="relayed_report">Someone told or reported it to me</option>
+              <option value="source_material">I saw or read it in another source</option>
+              <option value="derived_inference">I inferred it from other information</option>
+              <option value="unknown">Other / I am not sure</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Source reference <em>optional</em></span>
+            <input id="provenance-source" maxlength="500" placeholder="URL, attestation ID, document title, person/source label…">
+            <small>If you make this candidate public, this source reference is public too. Do not paste private or sensitive information.</small>
+          </label>
+        </section>
 
         <section class="capture-card">
           <div class="capture-head">
@@ -111,7 +143,7 @@
           <input id="public-candidate" type="checkbox">
           <span>
             <strong>Show this in the public field stream</strong>
-            <small>Claim text, optional name, coarse location, and evidence digest become public. The photo itself is not uploaded.</small>
+            <small>Claim text, optional name, stated provenance/source reference, coarse location, and evidence digest become public. The photo itself is not automatically published.</small>
           </span>
         </label>
 
@@ -143,6 +175,7 @@
             <div><dt>Packet SHA-256</dt><dd><code id="packet-sha"></code></dd></div>
             <div><dt>Receipt SHA-256</dt><dd><code id="receipt-sha"></code></dd></div>
             <div><dt>Assurance</dt><dd>browser-self-asserted</dd></div>
+            <div><dt>Provenance</dt><dd id="receipt-provenance"></dd></div>
           </dl>
           <div class="receipt-actions">
             <button type="button" id="copy-receipt" class="secondary">Copy receipt</button>
