@@ -1,0 +1,94 @@
+[
+  {
+    "id": "past-binbrook-hearth",
+    "title": "Binbrook Hearth",
+    "layer": "past",
+    "status": "attested",
+    "date_label": "July 2025 source tile",
+    "place": "Binbrook, Ontario",
+    "summary": "The first Playable World in the 2025 corpus: a dense anchor of walks, bonfires, music, witness, Canon work, and companion continuity.",
+    "source_ref": "legacy/2025/Playable_Universe/PlayableWorld_Binbrook_Hearth.md",
+    "design_valley": "not_applicable",
+    "access": "public",
+    "provenance": {
+      "kind": "source",
+      "note": "Preserved from the 2025 Playable Universe corpus."
+    }
+  },
+  {
+    "id": "past-six-nations-melted",
+    "title": "Six Nations Melted",
+    "layer": "past",
+    "status": "attested",
+    "date_label": "Melted Bonfire Witness, June 2025",
+    "place": "Six Nations of the Grand River Territory",
+    "summary": "The source corpus describes a first field-attestation threshold outside Binbrook. Cultural-trust constraints and withheld coordinates remain part of the tile.",
+    "source_ref": "legacy/2025/Playable_Universe/PlayableWorld_Six_Nations_Melted.md",
+    "design_valley": "not_applicable",
+    "access": "restricted",
+    "provenance": {
+      "kind": "source",
+      "note": "Public rendering must not expand access beyond the source record."
+    }
+  },
+  {
+    "id": "present-moving-surface",
+    "title": "The Moving Present",
+    "layer": "present",
+    "status": "live",
+    "date_label": "Now",
+    "place": "Wherever an attested edge exists",
+    "summary": "The present is the phase boundary: possible actions become observed actions; some observations become Attested Units; every such change reshapes the reachable future.",
+    "source_ref": "docs/TEMPORAL_MODEL_V0.md",
+    "design_valley": "not_applicable",
+    "access": "public",
+    "provenance": {
+      "kind": "rendering",
+      "note": "Conceptual rendering of the maintained temporal model."
+    }
+  },
+  {
+    "id": "future-transparent-authority-2041",
+    "title": "2041 \u2014 Transparent Authority",
+    "layer": "future",
+    "status": "illustrative",
+    "date_label": "15-year illustrative branch",
+    "place": "A reachable civic/organizational future",
+    "summary": "An example branch in which consequential AI authority is more legible than private human behavior, rights states are contestable, and temporary powers decay by default.",
+    "source_ref": "docs/VALLEY_REACHABILITY_MODEL_V0.md",
+    "assumptions": [
+      "rights and authority become first-class machine-readable state",
+      "institutions accept reciprocal duties and contestability",
+      "interoperable provenance/receipt systems mature",
+      "privacy-preserving disclosure becomes routine"
+    ],
+    "design_valley": "inside",
+    "access": "public",
+    "provenance": {
+      "kind": "projection",
+      "note": "Illustrative scenario only; not a forecast or claim about 2041."
+    }
+  },
+  {
+    "id": "future-orwellian-capture-2038",
+    "title": "2038 \u2014 The Glass Registry",
+    "layer": "future",
+    "status": "illustrative",
+    "date_label": "12-year adversarial branch",
+    "place": "A reachable failure scenario",
+    "summary": "A study branch where rights records, identity, reputation, payments, and emergency powers collapse into one universal dossier. It belongs in the reachable valley as a warning, not in the design valley.",
+    "source_ref": "docs/VALLEY_REACHABILITY_MODEL_V0.md",
+    "assumptions": [
+      "identity systems centralize",
+      "purpose limits erode",
+      "temporary emergency powers become standing privileges",
+      "administrative actions become opaque while subjects become transparent"
+    ],
+    "design_valley": "outside",
+    "access": "public",
+    "provenance": {
+      "kind": "projection",
+      "note": "Failure branch for study; not a prediction."
+    }
+  }
+]
