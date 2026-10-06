@@ -66,10 +66,31 @@
           <div id="photo-state" class="photo-state empty">
             <div id="photo-preview" class="preview">No photo selected</div>
             <div class="photo-meta">
-              <strong id="photo-name">Hash-only v0</strong>
-              <code id="photo-hash">The photo stays on this phone.</code>
-              <small id="photo-size">If selected, its SHA-256 is bound to the attest.</small>
+              <strong id="photo-name">No photo selected</strong>
+              <code id="photo-hash">Select or capture a photo to bind its SHA-256.</code>
+              <small id="photo-size">Browser camera captures are not guaranteed to be saved to your gallery automatically.</small>
             </div>
+          </div>
+
+          <div id="photo-custody" class="photo-custody" hidden>
+            <div class="photo-warning">
+              <strong>Keep the bytes somewhere.</strong>
+              <span>The first Playable Universe phone photo was lost because the browser had the bytes long enough to hash them but did not persist a gallery copy.</span>
+            </div>
+
+            <label class="custody-choice">
+              <input id="preserve-private" type="checkbox" checked>
+              <span>
+                <strong>Preserve the exact original privately on FC after I submit</strong>
+                <small>Recommended. The server verifies the already-sealed SHA-256 and stores the exact original outside the public web tree. This does not publish the photo.</small>
+              </span>
+            </label>
+
+            <div class="photo-actions">
+              <button type="button" id="save-photo-copy" class="secondary">Save a copy now</button>
+              <button type="button" id="share-photo-copy" class="secondary">Share / save through phone</button>
+            </div>
+            <p id="photo-custody-status" class="smallprint"></p>
           </div>
         </section>
 
@@ -132,8 +153,8 @@
           <section id="publish-photo-panel" class="publish-photo-panel" hidden>
             <p class="eyebrow">PHOTO PUBLICATION</p>
             <h3>Publish the matching photograph?</h3>
-            <p>The server will accept the original only if its SHA-256 exactly matches the photo digest already sealed into this candidate. It creates a metadata-stripped derivative and deletes the uploaded original. The derivative remains pending until local review.</p>
-            <button type="button" id="publish-selected-photo" class="secondary">Upload matching photo for review</button>
+            <p>If the exact original is in private custody, FC can create a metadata-stripped public derivative from those same sealed bytes. The original remains private. The derivative remains pending until local review.</p>
+            <button type="button" id="publish-selected-photo" class="secondary">Request public derivative for review</button>
             <p id="publish-photo-status" class="smallprint"></p>
           </section>
         </div>
