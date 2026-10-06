@@ -32,6 +32,18 @@ cp -a "$NGINX" "$BACKUP_ROOT/capweb.conf"
 if [ -f "$UNIT_TARGET" ]; then cp -a "$UNIT_TARGET" "$BACKUP_ROOT/service.unit"; fi
 if [ -d "$APP_TARGET" ]; then cp -a "$APP_TARGET" "$BACKUP_ROOT/intake"; fi
 if [ -d "$WORLD_TARGET" ]; then cp -a "$WORLD_TARGET" "$BACKUP_ROOT/world"; fi
+if [ -f "$DATA_TARGET/attestation-intake.sqlite3" ]; then
+  python3 - "$DATA_TARGET/attestation-intake.sqlite3" "$BACKUP_ROOT/attestation-intake.sqlite3" <<'PYDB'
+import sqlite3,sys
+src=sqlite3.connect(sys.argv[1])
+dst=sqlite3.connect(sys.argv[2])
+with dst:
+    src.backup(dst)
+dst.close()
+src.close()
+PYDB
+fi
+if [ -d "$DATA_TARGET/media" ]; then cp -a "$DATA_TARGET/media" "$BACKUP_ROOT/media"; fi
 
 echo "backup=$BACKUP_ROOT"
 
@@ -94,7 +106,7 @@ systemctl enable playable-universe-intake.service >/dev/null
 systemctl restart playable-universe-intake.service
 
 for _ in $(seq 1 30); do
-  if curl -fsS http://127.0.0.1:18270/healthz >/dev/null; then break; fi
+  if curl -fsS http://127.0.0.1:18270/healthz >/dev/null 2>&1; then break; fi
   sleep 0.25
 done
 curl -fsS http://127.0.0.1:18270/healthz >/dev/null
