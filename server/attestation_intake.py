@@ -38,6 +38,10 @@ WORLD_ROOT = Path(os.environ.get(
     "/opt/playable-universe/world",
 ))
 FFMPEG = os.environ.get("PLAYABLE_FFMPEG", "/usr/bin/ffmpeg")
+PUBLIC_ORIGIN = os.environ.get(
+    "PLAYABLE_PUBLIC_ORIGIN",
+    "https://playable.quietwire.ai",
+).rstrip("/")
 
 MAX_BODY = 32 * 1024
 MAX_PHOTO_BODY = 8 * 1024 * 1024
@@ -87,6 +91,12 @@ def canonical_bytes(value: object) -> bytes:
 
 def sha256_hex(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
+
+
+def public_url(path: str) -> str:
+    if not path.startswith("/"):
+        path = "/" + path
+    return PUBLIC_ORIGIN + path if PUBLIC_ORIGIN else path
 
 
 def db() -> sqlite3.Connection:
@@ -504,7 +514,7 @@ def approved_media_for(conn: sqlite3.Connection, candidate_id: str) -> list[dict
             "sha256": row["derivative_sha256"],
             "content_type": row["content_type"],
             "bytes": row["bytes"],
-            "url": f"/playable/api/v0/media/{row['media_id']}",
+            "url": public_url(f"/api/v0/media/{row['media_id']}"),
         }
         for row in rows
     ]
@@ -585,7 +595,7 @@ def world_scene_catalog() -> list[dict]:
             "temporal_mode": scene.get("temporal_mode"),
             "at": scene.get("at"),
             "branch_id": scene.get("branch_id"),
-            "manifest_url": f"/playable/api/v0/scenes/{slug}",
+            "manifest_url": public_url(f"/api/v0/scenes/{slug}"),
         })
     return items
 
