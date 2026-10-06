@@ -8,6 +8,12 @@ const photoPreview = document.querySelector("#photo-preview");
 const photoName = document.querySelector("#photo-name");
 const photoHash = document.querySelector("#photo-hash");
 const photoSize = document.querySelector("#photo-size");
+const photoCustody = document.querySelector("#photo-custody");
+const preservePrivate = document.querySelector("#preserve-private");
+const savePhotoCopy = document.querySelector("#save-photo-copy");
+const sharePhotoCopy = document.querySelector("#share-photo-copy");
+const photoCustodyStatus = document.querySelector("#photo-custody-status");
+
 const locationButton = document.querySelector("#location-button");
 const locationClear = document.querySelector("#location-clear");
 const locationState = document.querySelector("#location-state");
@@ -36,6 +42,7 @@ const existingPhotoCandidate = document.querySelector("#existing-photo-candidate
 const existingPhotoSha = document.querySelector("#existing-photo-sha");
 const existingPhotoFile = document.querySelector("#existing-photo-file");
 const existingPhotoUpload = document.querySelector("#existing-photo-upload");
+const existingPhotoPublish = document.querySelector("#existing-photo-publish");
 const existingPhotoStatus = document.querySelector("#existing-photo-status");
 
 let photoEvidence = null;
@@ -44,6 +51,8 @@ let photoObjectUrl = null;
 let coarseLocation = null;
 let lastPacket = null;
 let lastReceipt = null;
+let lastPrivateCustody = null;
+let existingPrivateReady = false;
 
 function newClientId() {
   if (crypto.randomUUID) return "browser:" + crypto.randomUUID();
@@ -68,6 +77,12 @@ function bytesLabel(n) {
   if (n < 1024) return n + " B";
   if (n < 1024 * 1024) return (n / 1024).toFixed(1) + " KiB";
   return (n / (1024 * 1024)).toFixed(2) + " MiB";
+}
+
+function esc(s) {
+  return String(s ?? "").replace(/[&<>"']/g, ch => ({
+    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"
+  })[ch]);
 }
 
 function buildPacket() {
@@ -133,6 +148,25 @@ function renderGlyph(el, seed) {
 
 renderGlyph(document.querySelector("#draft-glyph"), "2025playable2026");
 
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1500);
+}
+
+function durablePhotoFilename(file) {
+  const ext = (file.name && file.name.includes("."))
+    ? "." + file.name.split(".").pop().replace(/[^A-Za-z0-9]/g, "").slice(0, 8)
+    : (file.type === "image/png" ? ".png" : file.type === "image/webp" ? ".webp" : ".jpg");
+  return "playable-attestation-photo-" +
+    new Date().toISOString().replace(/[:.]/g, "-") + ext;
+}
+
 photoEl.addEventListener("change", async () => {
   const file = photoEl.files && photoEl.files[0];
   if (!file) return;
@@ -140,6 +174,7 @@ photoEl.addEventListener("change", async () => {
   try {
     const digest = await fileSha256(file);
     selectedPhotoFile = file;
+    lastPrivateCustody = null;
     photoEvidence = {
       kind: "photo_hash",
       sha256: digest,
@@ -157,12 +192,55 @@ photoEl.addEventListener("change", async () => {
     photoPreview.appendChild(img);
     photoName.textContent = file.name || "Phone photo";
     photoHash.textContent = digest;
-    photoSize.textContent = bytesLabel(file.size) + " · " + (file.type || "unknown MIME") + " · photo remains local until you explicitly publish it";
+    photoSize.textContent =
+      bytesLabel(file.size) + " · " + (file.type || "unknown MIME") +
+      " · browser-held until you save or preserve it";
     photoState.classList.remove("empty");
-    statusEl.textContent = "Photo digest ready. Selecting a photo still does not upload it.";
+    photoCustody.hidden = false;
+    photoCustodyStatus.textContent =
+      "Important: camera capture inside a browser is not guaranteed to create a gallery copy. Keep private preservation checked, or save/share a copy now.";
+    statusEl.textContent =
+      "Photo digest ready. No upload has happened yet.";
   } catch (err) {
     statusEl.textContent = "Could not hash photo: " + err.message;
   }
+});
+
+savePhotoCopy.addEventListener("click", () => {
+  if (!selectedPhotoFile) {
+    photoCustodyStatus.textContent = "Choose or take a photo first.";
+    return;
+  }
+  downloadBlob(selectedPhotoFile, durablePhotoFilename(selectedPhotoFile));
+  photoCustodyStatus.textContent =
+    "A copy was offered to the browser download system. On most phones this lands in Downloads/Files rather than the camera gallery.";
+});
+
+sharePhotoCopy.addEventListener("click", async () => {
+  if (!selectedPhotoFile) {
+    photoCustodyStatus.textContent = "Choose or take a photo first.";
+    return;
+  }
+  if (
+    navigator.share &&
+    (!navigator.canShare || navigator.canShare({files:[selectedPhotoFile]}))
+  ) {
+    try {
+      await navigator.share({
+        title:"Playable Universe attestation photo",
+        text:"Save or share this exact photo before leaving the attestation page.",
+        files:[selectedPhotoFile]
+      });
+      photoCustodyStatus.textContent =
+        "Phone share sheet opened for the exact selected file.";
+      return;
+    } catch (err) {
+      if (err.name === "AbortError") return;
+    }
+  }
+  downloadBlob(selectedPhotoFile, durablePhotoFilename(selectedPhotoFile));
+  photoCustodyStatus.textContent =
+    "File sharing was unavailable, so a browser download was offered instead.";
 });
 
 locationButton.addEventListener("click", () => {
@@ -183,7 +261,8 @@ locationButton.addEventListener("click", () => {
         coarseLocation.longitude.toFixed(3) +
         " · device accuracy reported about " + coarseLocation.accuracy_m + " m";
       locationClear.hidden = false;
-      statusEl.textContent = "Coarse location attached. Raw precision is not placed in the packet.";
+      statusEl.textContent =
+        "Coarse location attached. Raw precision is not placed in the packet.";
     },
     err => {
       statusEl.textContent = "Location not attached: " + err.message;
@@ -199,15 +278,11 @@ locationClear.addEventListener("click", () => {
 });
 
 function downloadObject(obj, filename) {
-  const blob = new Blob([JSON.stringify(obj, null, 2) + "\n"], {type:"application/json"});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  const blob = new Blob(
+    [JSON.stringify(obj, null, 2) + "\n"],
+    {type:"application/json"}
+  );
+  downloadBlob(blob, filename);
 }
 
 downloadButton.addEventListener("click", () => {
@@ -215,8 +290,9 @@ downloadButton.addEventListener("click", () => {
     const packet = buildPacket();
     lastPacket = packet;
     downloadObject(
-      {packet, receipt:lastReceipt},
-      "playable-attestation-" + new Date().toISOString().replace(/[:.]/g, "-") + ".json"
+      {packet, receipt:lastReceipt, private_custody:lastPrivateCustody},
+      "playable-attestation-" +
+        new Date().toISOString().replace(/[:.]/g, "-") + ".json"
     );
     statusEl.textContent = "Draft JSON downloaded. This does not submit anything.";
   } catch (err) {
@@ -224,20 +300,24 @@ downloadButton.addEventListener("click", () => {
   }
 });
 
-async function uploadMatchingPhoto(candidateId, expectedSha, file, statusTarget) {
-  if (!file) throw new Error("Choose the exact saved photo first.");
+async function uploadPrivatePhoto(candidateId, expectedSha, file, statusTarget) {
+  if (!file) throw new Error("Choose the exact photo first.");
   const actual = await fileSha256(file);
   if (actual !== expectedSha) {
-    throw new Error("This file does not match the SHA-256 sealed into the attestation. Nothing was uploaded.");
+    throw new Error(
+      "This file does not match the SHA-256 sealed into the attestation. Nothing was uploaded."
+    );
   }
-  statusTarget.textContent = "Digest matches. Uploading original temporarily for server verification and derivative creation…";
+  statusTarget.textContent =
+    "Digest matches. Preserving the exact original in private FC custody…";
   const response = await fetch(
     "../api/v0/attestations/" + encodeURIComponent(candidateId) + "/photo",
     {
       method:"POST",
       headers:{
         "Content-Type": file.type || "image/jpeg",
-        "X-Photo-Sha256": expectedSha
+        "X-Photo-Sha256": expectedSha,
+        "X-Evidence-Custody": "private-retain"
       },
       body:file
     }
@@ -247,8 +327,30 @@ async function uploadMatchingPhoto(candidateId, expectedSha, file, statusTarget)
     throw new Error(result.detail || result.error || ("HTTP " + response.status));
   }
   statusTarget.textContent =
-    "Photo derivative received as " + result.media_id +
-    ". It is pending local review before public display. The uploaded original was not retained by this service.";
+    "Exact original preserved privately as " + result.private_media_id +
+    ". It is not publicly retrievable.";
+  return result;
+}
+
+async function requestPublicDerivative(candidateId, expectedSha, statusTarget) {
+  statusTarget.textContent =
+    "Requesting a metadata-stripped public derivative from the exact private original…";
+  const response = await fetch(
+    "../api/v0/attestations/" + encodeURIComponent(candidateId) + "/photo/publish",
+    {
+      method:"POST",
+      headers:{
+        "X-Photo-Sha256": expectedSha
+      }
+    }
+  );
+  const result = await response.json();
+  if (!response.ok) {
+    throw new Error(result.detail || result.error || ("HTTP " + response.status));
+  }
+  statusTarget.textContent =
+    "Derivative " + result.media_id + " is " + result.status +
+    ". Local review is required before public display.";
   return result;
 }
 
@@ -264,6 +366,7 @@ form.addEventListener("submit", async event => {
   lastPacket = packet;
   statusEl.textContent = "Submitting candidate packet…";
   document.querySelector("#submit-button").disabled = true;
+
   try {
     const response = await fetch("../api/v0/attestations", {
       method:"POST",
@@ -271,7 +374,10 @@ form.addEventListener("submit", async event => {
       body:JSON.stringify(packet)
     });
     const result = await response.json();
-    if (!response.ok) throw new Error(result.detail || result.error || ("HTTP " + response.status));
+    if (!response.ok) {
+      throw new Error(result.detail || result.error || ("HTTP " + response.status));
+    }
+
     lastReceipt = result;
     receiptEmpty.hidden = true;
     receiptCard.hidden = false;
@@ -279,36 +385,75 @@ form.addEventListener("submit", async event => {
     receiptTime.textContent = result.received_at;
     packetSha.textContent = result.packet_sha256;
     receiptSha.textContent = result.receipt_sha256;
-    receiptPublic.textContent = result.public_candidate ? "PUBLIC CANDIDATE" : "RECEIPT ONLY";
+    receiptPublic.textContent =
+      result.public_candidate ? "PUBLIC CANDIDATE" : "RECEIPT ONLY";
     renderGlyph(document.querySelector("#receipt-glyph"), result.receipt_sha256);
 
-    publishPhotoPanel.hidden = !(
-      result.public_candidate &&
-      selectedPhotoFile &&
-      photoEvidence &&
-      photoEvidence.kind === "photo_hash"
-    );
+    lastPrivateCustody = null;
+    publishPhotoPanel.hidden = true;
     publishPhotoStatus.textContent = "";
 
-    statusEl.textContent = "Attest received. Candidate receipt created.";
+    if (selectedPhotoFile && photoEvidence && preservePrivate.checked) {
+      try {
+        lastPrivateCustody = await uploadPrivatePhoto(
+          result.candidate_id,
+          photoEvidence.sha256,
+          selectedPhotoFile,
+          photoCustodyStatus
+        );
+        if (result.public_candidate) {
+          publishPhotoPanel.hidden = false;
+          publishPhotoStatus.textContent =
+            "The exact original is now preserved privately. You may separately request a public derivative.";
+        }
+        statusEl.textContent =
+          "Attest received, receipt created, and exact photo preserved privately.";
+      } catch (custodyErr) {
+        statusEl.textContent =
+          "Attest received, but private photo preservation failed: " +
+          custodyErr.message +
+          ". The receipt is valid; keep this page open or save the photo before leaving.";
+        photoCustodyStatus.textContent = custodyErr.message;
+      }
+    } else {
+      statusEl.textContent = selectedPhotoFile
+        ? "Attest received. Photo hash is bound, but the bytes remain only in this browser/device unless you save them."
+        : "Attest received. Candidate receipt created.";
+    }
+
     if (result.public_candidate) loadStream();
   } catch (err) {
-    statusEl.textContent = "Submission failed: " + err.message + ". You can still download the draft packet.";
+    statusEl.textContent =
+      "Submission failed: " + err.message +
+      ". You can still download the draft packet.";
   } finally {
     document.querySelector("#submit-button").disabled = false;
   }
 });
 
 publishSelectedPhoto.addEventListener("click", async () => {
-  if (!lastReceipt || !photoEvidence || !selectedPhotoFile) return;
+  if (!lastReceipt || !photoEvidence) return;
   publishSelectedPhoto.disabled = true;
   try {
-    await uploadMatchingPhoto(
+    if (!lastPrivateCustody) {
+      if (!selectedPhotoFile) {
+        throw new Error(
+          "The original is not in private custody and is no longer available in this page."
+        );
+      }
+      lastPrivateCustody = await uploadPrivatePhoto(
+        lastReceipt.candidate_id,
+        photoEvidence.sha256,
+        selectedPhotoFile,
+        publishPhotoStatus
+      );
+    }
+    await requestPublicDerivative(
       lastReceipt.candidate_id,
       photoEvidence.sha256,
-      selectedPhotoFile,
       publishPhotoStatus
     );
+    loadStream();
   } catch (err) {
     publishPhotoStatus.textContent = err.message;
   } finally {
@@ -318,7 +463,10 @@ publishSelectedPhoto.addEventListener("click", async () => {
 
 copyReceipt.addEventListener("click", async () => {
   if (!lastReceipt) return;
-  await navigator.clipboard.writeText(JSON.stringify(lastReceipt, null, 2));
+  await navigator.clipboard.writeText(JSON.stringify({
+    receipt:lastReceipt,
+    private_custody:lastPrivateCustody
+  }, null, 2));
   statusEl.textContent = "Receipt copied.";
 });
 
@@ -336,55 +484,116 @@ shareReceipt.addEventListener("click", async () => {
   }
 });
 
-function esc(s) {
-  return String(s ?? "").replace(/[&<>"']/g, ch => ({
-    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"
-  })[ch]);
-}
-
 function photoEvidenceItem(packet) {
   return (packet.evidence || []).find(e => e.kind === "photo_hash") || null;
+}
+
+function lifecycleLabel(event) {
+  const labels = {
+    "candidate.received":"candidate received",
+    "evidence.private_custody_received":"exact original preserved privately",
+    "evidence.public_derivative_pending":"public derivative pending review",
+    "evidence.public_derivative_approved":"public derivative approved",
+    "evidence.public_derivative_rejected":"public derivative rejected",
+    "evidence.source_unavailable_reported":"source bytes later reported unavailable"
+  };
+  return labels[event.event_type] || event.event_type;
 }
 
 async function loadStream() {
   streamGrid.innerHTML = '<p class="muted">Loading public candidates…</p>';
   try {
-    const r = await fetch("../api/v0/attestations/public?limit=30", {cache:"no-store"});
+    const r = await fetch(
+      "../api/v0/attestations/public?limit=30",
+      {cache:"no-store"}
+    );
     if (!r.ok) throw new Error("HTTP " + r.status);
     const feed = await r.json();
     if (!feed.items.length) {
-      streamGrid.innerHTML = '<p class="muted">No public field candidates yet. The first one can be made above.</p>';
+      streamGrid.innerHTML =
+        '<p class="muted">No public field candidates yet. The first one can be made above.</p>';
       return;
     }
+
     streamGrid.innerHTML = feed.items.map(item => {
       const p = item.packet;
       const who = p.witness.display_name || "Anonymous witness";
       const where = p.location.mode === "coarse"
-        ? p.location.latitude.toFixed(3) + ", " + p.location.longitude.toFixed(3)
+        ? p.location.latitude.toFixed(3) + ", " +
+          p.location.longitude.toFixed(3)
         : "no location";
+
       const media = item.media || [];
       const photo = media.find(m => m.kind === "public_photo_derivative");
       const evidencePhoto = photoEvidenceItem(p);
+      const summary = item.evidence_summary || {};
+      const lifecycle = item.lifecycle || [];
+
       const photoHtml = photo
-        ? '<img class="public-photo" loading="lazy" src="' + esc(photo.url) + '" alt="Published attestation photo derivative">'
+        ? '<img class="public-photo" loading="lazy" src="' +
+          esc(photo.url) +
+          '" alt="Published attestation photo derivative">'
         : "";
-      const attachHtml = (!photo && evidencePhoto)
-        ? '<button class="attach-existing" type="button" data-candidate="' + esc(item.candidate_id) +
-          '" data-sha="' + esc(evidencePhoto.sha256) + '">Attach matching photo</button>'
+
+      let stateHtml = "";
+      if ((summary.public_derivative_count || 0) > 0) {
+        stateHtml =
+          '<span class="evidence-state private">public evidence available</span>';
+      } else if ((summary.private_retained_count || 0) > 0) {
+        stateHtml =
+          '<span class="evidence-state private">exact original preserved privately</span>';
+      } else if ((summary.source_unavailable_reported_count || 0) > 0) {
+        stateHtml =
+          '<span class="evidence-state lost">bound source bytes unavailable</span>';
+      } else if (evidencePhoto) {
+        stateHtml =
+          '<span class="evidence-state">photo hash bound · bytes not retained by FC</span>';
+      }
+
+      const attachHtml = (
+        !photo &&
+        evidencePhoto &&
+        (summary.private_retained_count || 0) === 0
+      )
+        ? '<button class="attach-existing" type="button" data-candidate="' +
+          esc(item.candidate_id) +
+          '" data-sha="' +
+          esc(evidencePhoto.sha256) +
+          '">Found the original? Preserve matching photo</button>'
         : "";
+
+      const lifecycleHtml = lifecycle.length
+        ? '<div class="lifecycle"><strong>Evidence lifecycle</strong><ul>' +
+          lifecycle.slice(-5).map(event =>
+            '<li>' +
+            esc(new Date(event.recorded_at).toLocaleString()) +
+            ' · ' + esc(lifecycleLabel(event)) +
+            '</li>'
+          ).join("") +
+          '</ul></div>'
+        : "";
+
       return '<article class="stream-card">' +
         '<div class="stamp"><span class="unverified">SELF-ATTESTED / UNVERIFIED</span><span>' +
-        esc(new Date(item.received_at).toLocaleString()) + '</span></div>' +
+        esc(new Date(item.received_at).toLocaleString()) +
+        '</span></div>' +
         photoHtml +
         '<p class="claim">' + esc(p.claim.text) + '</p>' +
-        '<p class="meta">' + esc(who) + ' · ' + esc(p.claim.kind.replaceAll("_"," ")) +
-        ' · ' + esc(where) + ' · ' + p.evidence.length + ' evidence digest(s)</p>' +
+        '<p class="meta">' +
+        esc(who) + ' · ' +
+        esc(p.claim.kind.replaceAll("_"," ")) + ' · ' +
+        esc(where) + ' · ' +
+        p.evidence.length + ' evidence digest(s)</p>' +
+        stateHtml +
         '<code>' + esc(item.candidate_id) + '</code>' +
         attachHtml +
+        lifecycleHtml +
         '</article>';
     }).join("");
   } catch (err) {
-    streamGrid.innerHTML = '<p class="muted">Field stream unavailable: ' + esc(err.message) + '</p>';
+    streamGrid.innerHTML =
+      '<p class="muted">Field stream unavailable: ' +
+      esc(err.message) + '</p>';
   }
 }
 
@@ -394,10 +603,14 @@ streamGrid.addEventListener("click", event => {
   existingPhotoCandidate.value = button.dataset.candidate;
   existingPhotoSha.value = button.dataset.sha;
   existingPhotoLabel.textContent =
-    button.dataset.candidate + " · expected SHA-256 " + button.dataset.sha;
+    button.dataset.candidate +
+    " · expected SHA-256 " +
+    button.dataset.sha;
   existingPhotoFile.value = "";
   existingPhotoStatus.textContent =
     "Choose the exact original photo whose digest was sealed into this candidate.";
+  existingPhotoPublish.hidden = true;
+  existingPrivateReady = false;
   existingPhotoPanel.hidden = false;
   existingPhotoPanel.scrollIntoView({behavior:"smooth", block:"center"});
 });
@@ -408,11 +621,38 @@ existingPhotoUpload.addEventListener("click", async () => {
   const file = existingPhotoFile.files && existingPhotoFile.files[0];
   existingPhotoUpload.disabled = true;
   try {
-    await uploadMatchingPhoto(candidateId, expected, file, existingPhotoStatus);
+    await uploadPrivatePhoto(
+      candidateId,
+      expected,
+      file,
+      existingPhotoStatus
+    );
+    existingPrivateReady = true;
+    existingPhotoPublish.hidden = false;
+    existingPhotoStatus.textContent +=
+      " You can now request a public derivative without uploading the original again.";
+    loadStream();
   } catch (err) {
     existingPhotoStatus.textContent = err.message;
   } finally {
     existingPhotoUpload.disabled = false;
+  }
+});
+
+existingPhotoPublish.addEventListener("click", async () => {
+  if (!existingPrivateReady) return;
+  existingPhotoPublish.disabled = true;
+  try {
+    await requestPublicDerivative(
+      existingPhotoCandidate.value,
+      existingPhotoSha.value,
+      existingPhotoStatus
+    );
+    loadStream();
+  } catch (err) {
+    existingPhotoStatus.textContent = err.message;
+  } finally {
+    existingPhotoPublish.disabled = false;
   }
 });
 
