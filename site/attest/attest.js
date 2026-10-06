@@ -562,6 +562,18 @@ async function loadStream() {
           '">Found the original? Preserve matching photo</button>'
         : "";
 
+      const publishExistingHtml = (
+        !photo &&
+        evidencePhoto &&
+        (summary.private_retained_count || 0) > 0
+      )
+        ? '<button class="publish-existing-private" type="button" data-candidate="' +
+          esc(item.candidate_id) +
+          '" data-sha="' +
+          esc(evidencePhoto.sha256) +
+          '">Request public derivative from private original</button>'
+        : "";
+
       const lifecycleHtml = lifecycle.length
         ? '<div class="lifecycle"><strong>Evidence lifecycle</strong><ul>' +
           lifecycle.slice(-5).map(event =>
@@ -587,6 +599,7 @@ async function loadStream() {
         stateHtml +
         '<code>' + esc(item.candidate_id) + '</code>' +
         attachHtml +
+        publishExistingHtml +
         lifecycleHtml +
         '</article>';
     }).join("");
@@ -597,7 +610,27 @@ async function loadStream() {
   }
 }
 
-streamGrid.addEventListener("click", event => {
+streamGrid.addEventListener("click", async event => {
+  const publishButton = event.target.closest(".publish-existing-private");
+  if (publishButton) {
+    publishButton.disabled = true;
+    try {
+      statusEl.textContent =
+        "Requesting public derivative from the privately retained original…";
+      await requestPublicDerivative(
+        publishButton.dataset.candidate,
+        publishButton.dataset.sha,
+        statusEl
+      );
+      await loadStream();
+    } catch (err) {
+      statusEl.textContent = err.message;
+    } finally {
+      publishButton.disabled = false;
+    }
+    return;
+  }
+
   const button = event.target.closest(".attach-existing");
   if (!button) return;
   existingPhotoCandidate.value = button.dataset.candidate;
