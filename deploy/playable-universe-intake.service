@@ -12,6 +12,7 @@ Environment=PLAYABLE_INTAKE_HOST=127.0.0.1
 Environment=PLAYABLE_INTAKE_PORT=18270
 Environment=PLAYABLE_INTAKE_DB=/var/lib/playable-universe/attestation-intake.sqlite3
 Environment=PLAYABLE_MEDIA_ROOT=/var/lib/playable-universe/media
+Environment=PLAYABLE_PRIVATE_MEDIA_ROOT=/var/lib/playable-universe/private-media
 Environment=PLAYABLE_WORLD_ROOT=/opt/playable-universe/world
 Environment=PLAYABLE_FFMPEG=/usr/bin/ffmpeg
 ExecStart=/usr/bin/python3 /opt/playable-universe/intake/attestation_intake.py
