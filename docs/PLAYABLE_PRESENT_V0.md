@@ -25,7 +25,7 @@ A Present Room contains:
 
 ## First useful fixture
 
-A live physical installation such as the user's Flipper-node example is an ideal Present fixture because it exercises both directions:
+A live physical installation with a real governed sensor/actuator path is an ideal Present fixture because it exercises both directions:
 
 ```
 physical world
