@@ -167,14 +167,30 @@ curl -fsS http://127.0.0.1:18270/healthz   | python3 -c 'import json,sys; x=json
 
 echo "=== CANONICAL SMOKE ==="
 
-curl -fsS https://playable.quietwire.ai/   | grep -q "OPEN FIELD TEST"
+check_contains() {
+  local url=$1
+  local marker=$2
+  local label=$3
 
-curl -fsS https://playable.quietwire.ai/attest/   | grep -q "How do you know this?"
+  curl -fsS "$url" \
+    | python3 -c 'import sys; marker=sys.argv[1]; body=sys.stdin.read(); assert marker in body' "$marker"
 
-curl -fsS https://playable.quietwire.ai/api/healthz   | python3 -c 'import json,sys; x=json.load(sys.stdin); assert x.get("status") == "ok"'
+  echo "$label=ok"
+}
 
-echo "canonical_root=ok"
-echo "canonical_attest_provenance=ok"
+check_contains \
+  https://playable.quietwire.ai/ \
+  "OPEN FIELD TEST" \
+  canonical_root
+
+check_contains \
+  https://playable.quietwire.ai/attest/ \
+  "How do you know this?" \
+  canonical_attest_provenance
+
+curl -fsS https://playable.quietwire.ai/api/healthz \
+  | python3 -c 'import json,sys; x=json.load(sys.stdin); assert x.get("status") == "ok"'
+
 echo "canonical_api=ok"
 
 rm -rf "$SITE_TARGET.old-$STAMP"
