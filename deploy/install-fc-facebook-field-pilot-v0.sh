@@ -42,10 +42,19 @@ grep -q '"provenance"' "$INTAKE_SRC" || {
 
 echo "=== PREDEPLOY TESTS ==="
 
-python3 -m py_compile "$INTAKE_SRC"
-python3 -m unittest discover -s "$TEST_ROOT" -p 'test_*.py'
+python3 - "$INTAKE_SRC" <<'PYCOMPILE'
+from pathlib import Path
+import sys
 
-python3 - "$INTAKE_SRC" <<'PY'
+path = Path(sys.argv[1])
+compile(path.read_text(), str(path), "exec")
+print("intake_syntax_ok=true")
+PYCOMPILE
+
+PYTHONDONTWRITEBYTECODE=1 \
+  python3 -m unittest discover -s "$TEST_ROOT" -p 'test_*.py'
+
+PYTHONDONTWRITEBYTECODE=1 python3 - "$INTAKE_SRC" <<'PY'
 import importlib.util
 import sys
 
