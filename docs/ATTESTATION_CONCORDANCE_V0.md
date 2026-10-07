@@ -171,3 +171,38 @@ The first Facebook-scale experiment is deliberately empirical:
 > Will ordinary people understand and use explicit provenance when the question is phrased simply as “How do you know this?”
 
 The resulting packets will tell us what provenance vocabulary is intuitive before we harden the next relation and lineage schemas.
+
+
+## Public field pilot activation
+
+The first explicit-provenance public field pilot was activated on FC on 2026-10-07 UTC.
+
+Canonical surfaces:
+
+- `https://playable.quietwire.ai/`
+- `https://playable.quietwire.ai/attest/`
+
+Activated behavior:
+
+- ordinary browser users are asked `How do you know this?`;
+- new browser packets carry explicit stated provenance;
+- older clients without provenance remain accepted and normalize to `unspecified`;
+- optional source references are preserved;
+- public candidates display stated provenance;
+- candidate public visibility remains opt-in / receipt-only by default;
+- location remains opt-in;
+- a candidate receipt remains distinct from verification or Canon.
+
+Deployment source:
+
+`62b36febbd34c0a829712a6677f5281dfae52fae`
+
+Live post-deployment verification confirmed:
+
+- canonical root contains the open-field-test invitation;
+- canonical attestation page contains the provenance control;
+- deployed intake contains the provenance vocabulary and validation path;
+- intake health reports `status: ok`;
+- `playable-universe-intake.service` is active.
+
+No synthetic candidate was inserted solely for deployment verification.
